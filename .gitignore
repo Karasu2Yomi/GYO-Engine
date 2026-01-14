@@ -9,3 +9,6 @@
 /third_party/sdl3/sdl3-build/
 /third_party/sdl3/sdl3-src/
 /third_party/sdl3/sdl3-tmp/
+/third_party/doctest/doctest-build/
+/third_party/doctest/doctest-src/
+/third_party/doctest/doctest-tmp/

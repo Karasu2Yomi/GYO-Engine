@@ -1,5 +1,5 @@
-
-``` bash
+## プロジェクトの構造
+```txt
 ProjectRoot/
     ├─ CMakeLists.txt
     ├─ README.md
@@ -13,34 +13,34 @@ ProjectRoot/
     │  └─ ...
     │
     ├─ engine/                     # ★通用エンジン本体（ゲームに依存しない）
-    │  ├─ include/Engine/
+    │  ├─ include/engine/
     │  │  ├─ EngineCore.hpp
-    │  │  ├─ Services/             # EngineServices（必要最小の参照束）
-    │  │  ├─ IO/                   # IFileSystem, File APIs（抽象）
-    │  │  ├─ Asset/                # AssetManager, AssetCatalog, ImporterRegistry
-    │  │  ├─ Scene/                # SceneManager, SceneStack, SceneDef
-    │  │  ├─ Event/                # EventBus, Event types（境界イベントのみ）
-    │  │  ├─ Render/               # RenderManager, DrawCommand, RenderQueue, IRenderAPI
-    │  │  ├─ Audio/                # AudioManager(Handle管理), IAudioDevice
-    │  │  ├─ Animation/            # AnimationLibrary(Clip等Asset)
-    │  │  ├─ Debug/                # Log, Profiler(任意), DebugDrawQueue(任意)
-    │  │  └─ Math/                 # Vec2/Mat, Rect 等
+    │  │  ├─ services/             # EngineServices（必要最小の参照束）
+    │  │  ├─ io/                   # IFileSystem, File APIs（抽象）
+    │  │  ├─ asset/                # AssetManager, AssetCatalog, ImporterRegistry
+    │  │  ├─ scene/                # SceneManager, SceneStack, SceneDef
+    │  │  ├─ event/                # EventBus, Event types（境界イベントのみ）
+    │  │  ├─ render/               # RenderManager, DrawCommand, RenderQueue, IRenderAPI
+    │  │  ├─ audio/                # AudioManager(Handle管理), IAudioDevice
+    │  │  ├─ animation/            # AnimationLibrary(Clip等Asset)
+    │  │  ├─ debug/                # Log, Profiler(任意), DebugDrawQueue(任意)
+    │  │  └─ math/                 # Vec2/Mat, Rect 等
     │  │
     │  └─ src/
     │     ├─ EngineCore.cpp
-    │     ├─ Services/
-    │     ├─ IO/
-    │     ├─ Asset/
-    │     ├─ Scene/
-    │     ├─ Event/
-    │     ├─ Render/
-    │     ├─ Audio/
-    │     ├─ Animation/
-    │     ├─ Debug/
-    │     └─ Math/
+    │     ├─ services/
+    │     ├─ io/
+    │     ├─ asset/
+    │     ├─ scene/
+    │     ├─ event/
+    │     ├─ render/
+    │     ├─ audio/
+    │     ├─ animation/
+    │     ├─ debug/
+    │     └─ math/
     │
     ├─ platform/                   # ★外部API隔離（DX12/SDL/vulkan等）
-    │  ├─ include/Platform/
+    │  ├─ include/platform/
     │  │  ├─ dx12/                 # Platform::Dx12RenderAPI 等（IRenderAPI実装）
     │  │  ├─ sdl/                  # 入力/ウィンドウ等
     │  │  ├─ vulkan/               # vulkan用Adapter
@@ -52,7 +52,7 @@ ProjectRoot/
     │     └─ win32/
     │
     ├─ systems/                    # ★General Systems（汎用ロジック：毎フレーム更新）
-    │  ├─ include/Systems/
+    │  ├─ include/systems/
     │  │  ├─ InputSystem.hpp
     │  │  ├─ UISystem.hpp
     │  │  ├─ CollisionSystem.hpp
@@ -70,32 +70,32 @@ ProjectRoot/
     │     └─ AudioSystem.cpp
     │
     ├─ framework/                  # ★Game Framework / Domain Systems（ドメイン再利用）
-    │  ├─ include/GameFramework/
-    │  │  ├─ Combat/
-    │  │  ├─ Status/
-    │  │  ├─ AI/
-    │  │  ├─ Level/                # LevelDef/LevelRuntime（DefとRuntimeはここが分かりやすい）
-    │  │  └─ Components/           # Actorにぶら下げる共通部品（任意）
+    │  ├─ include/game_framework/
+    │  │  ├─ combat/
+    │  │  ├─ status/
+    │  │  ├─ ai/
+    │  │  ├─ stage/                # StageDef/StageRuntime（DefとRuntimeはここが分かりやすい）「元Level」
+    │  │  └─ components/           # Actorにぶら下げる共通部品（任意）
     │  └─ src/
-    │     ├─ Combat/
-    │     ├─ Status/
-    │     ├─ AI/
-    │     ├─ Level/
-    │     └─ Components/
+    │     ├─ combat/
+    │     ├─ status/
+    │     ├─ ai/
+    │     ├─ stage/
+    │     └─ components/
     │
-    ├─ game/                       # ★具体プロジェクト（Atlus向け作品そのもの）
-    │  ├─ include/Game/
+    ├─ game/                       # ★具体プロジェクト
+    │  ├─ include/game/
     │  │  ├─ GameApp.hpp
-    │  │  ├─ Scenes/
-    │  │  ├─ Actors/
-    │  │  ├─ UI/
-    │  │  └─ Importers/            # ★ここが重要：TileMapImporter/LevelImporter等を登録する側
+    │  │  ├─ scenes/
+    │  │  ├─ actors/
+    │  │  ├─ ui/
+    │  │  └─ importers/            # ★ここが重要：TileMapImporter/StageImporter等を登録する側
     │  └─ src/
     │     ├─ GameApp.cpp
-    │     ├─ Scenes/
-    │     ├─ Actors/
-    │     ├─ UI/
-    │     └─ Importers/
+    │     ├─ scenes/
+    │     ├─ actors/
+    │     ├─ ui/
+    │     └─ importers/
     │
     ├─ assets/                     # 実データ（実行時に読む）
     │  ├─ catalog.json             # id->type->path（AssetCatalog）
@@ -121,3 +121,11 @@ ProjectRoot/
        └─ editor/                  # ツール実行（engine + platform + tools）
 
 ```
+## 命名原則（ネーミング規則）
+| 種別                  | 命名規則                       | 例                                |
+| ------------------- | -------------------------- | -------------------------------- |
+| **フォルダ名**           | すべて小文字 + `_` 区切り           | `engine_core`, `render_api`      |
+| **C++ の namespace** | パスカルケース（大文字始まり）またはエンジン名ベース | `Engine::Render`, `Game::Scenes` |
+| **C++ ファイル名**       | パスカルケース + `.hpp / .cpp`    | `SceneManager.hpp`               |
+| **アセット用フォルダ**       | 小文字、種類ごとに分類                | `textures/`, `sounds/`, `data/`  |
+| **JSON / CSV**      | すべて小文字                     | `scene_all.json`, `mapdata.csv`  |

@@ -21,6 +21,7 @@ target_link_libraries(Runtime PRIVATE
     SDL3::SDL3
     imgui::imgui
     nlohmann_json::nlohmann_json
+    engine
 )
 copy_sdl3_dll(Runtime)
 
@@ -31,3 +32,5 @@ add_executable(Editor WIN32 editor/main.cpp)
 target_compile_definitions(Editor PRIVATE SDL_MAIN_HANDLED)
 # target_link_libraries(Editor PRIVATE Apps::EditorCore)
 copy_sdl3_dll(Editor)
+
+add_dependencies(Editor Runtime)

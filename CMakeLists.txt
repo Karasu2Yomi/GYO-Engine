@@ -10,6 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BUILD_TOOLS "Build tools (editor, etc.)" ON)
 option(BUILD_GAME  "Build game executable" ON)
+option(RUN_TEST_CASE  "Test case executable" ON)
 
 
 # =========================
@@ -21,7 +22,7 @@ add_subdirectory(third_party)
 # ここから自作サブプロジェクト（internal）
 # =========================
 
-#add_subdirectory(engine)
+add_subdirectory(engine)
 #add_subdirectory(systems)
 #add_subdirectory(game)
 #add_subdirectory(game)
@@ -40,28 +41,9 @@ if(BUILD_TOOLS)
     add_subdirectory(tools)
 endif()
 
+if(RUN_TEST_CASE)
+    add_subdirectory(tests)
+endif ()
 
 # 実行入口（main あり）
 add_subdirectory(apps)
-
-#add_executable(${PROJECT_NAME} WIN32
-#        apps/runtime/game_main.cpp
-#)
-
-# SDLの「SDL_main」を使わず自前 main() にする（保険）
-#target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
-#
-#target_link_libraries(${PROJECT_NAME} PRIVATE
-#    SDL3::SDL3
-#    imgui_lib
-#    nlohmann_json::nlohmann_json
-#)
-#
-## Windows: 実行時にSDL3.dllが必要な場合があるので、exeの隣にコピー
-#if (WIN32)
-#    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#        $<TARGET_FILE:SDL3::SDL3>
-#        $<TARGET_FILE_DIR:${PROJECT_NAME}>
-#    )
-#endif()
