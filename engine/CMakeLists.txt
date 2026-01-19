@@ -6,7 +6,11 @@ target_include_directories(engine PUBLIC
 
 target_sources(engine
     PRIVATE
-    #
+    # base
+    # io/path
+    src/io/path/PathUtils.cpp
+    src/io/path/Uri.cpp
+
     # asset/catalog
     src/asset/catalog/CatalogParser.cpp
     # asset/loaders
