@@ -9,7 +9,7 @@ namespace Engine::Asset::Loaders {
     }
 
     Base::Result<Core::AnyAsset, AssetError>
-    BinaryLoader::Load(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    BinaryLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         auto bin = std::make_shared<BinaryAsset>();
         bin->bytes.assign(bytes.begin(), bytes.end());
 

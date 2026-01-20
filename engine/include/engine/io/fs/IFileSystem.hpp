@@ -1,0 +1,8 @@
+//
+// Created by finny on 2026/01/20.
+//
+
+#ifndef GYO_ENGINE_IFILESYSTEM_H
+#define GYO_ENGINE_IFILESYSTEM_H
+
+#endif //GYO_ENGINE_IFILESYSTEM_H

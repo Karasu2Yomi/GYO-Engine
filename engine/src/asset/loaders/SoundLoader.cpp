@@ -18,7 +18,7 @@ namespace Engine::Asset::Loaders {
     }
 
     Base::Result<Core::AnyAsset, AssetError>
-    SoundLoader::Load(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    SoundLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         const auto* p = reinterpret_cast<const unsigned char*>(bytes.data());
         const std::size_t n = bytes.size();
 

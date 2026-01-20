@@ -48,7 +48,7 @@ namespace Engine::Asset::Loaders {
 
     // PPM (P6 binary, P3 ascii) をデコードして RGBA8 を返す
     static Base::Result<std::shared_ptr<TextureAsset>, AssetError>
-    DecodePPM(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    DecodePPM(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         const char* p = reinterpret_cast<const char*>(bytes.data());
         const char* end = p + bytes.size();
 
@@ -140,7 +140,7 @@ namespace Engine::Asset::Loaders {
     }
 
     Base::Result<Core::AnyAsset, AssetError>
-    TextureLoader::Load(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    TextureLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         auto decoded = DecodePPM(bytes, ctx);
         if (!decoded) {
             return Base::Result<Core::AnyAsset, AssetError>::Err(std::move(decoded.error()));

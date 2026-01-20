@@ -9,7 +9,7 @@ namespace Engine::Asset::Loaders {
     }
 
     Base::Result<Core::AnyAsset, AssetError>
-    FontLoader::Load(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    FontLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         if (bytes.empty()) {
             return Base::Result<Core::AnyAsset, AssetError>::Err(
                 AssetError::Make(AssetErrorCode::DecodeFailed, "Font: empty file", ctx.resolvedPath));

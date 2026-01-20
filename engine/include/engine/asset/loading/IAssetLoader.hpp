@@ -7,7 +7,7 @@
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/core/AnyAsset.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/asset/detail/Span.hpp"
+#include "engine/base/Span.hpp"
 #include "engine/asset/loading/LoadContext.hpp"
 
 
@@ -26,7 +26,7 @@ namespace Engine::Asset::Loading {
 
         // bytes を decode/parse して AnyAsset を返す
         virtual Base::Result<Core::AnyAsset, AssetError>
-        Load(Detail::ConstSpan<std::byte> bytes, const LoadContext& ctx) = 0;
+        Load(Base::ConstSpan<std::byte> bytes, const LoadContext& ctx) = 0;
     };
 
 } // namespace Engine::Asset::Loading

@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace Engine::Asset::Detail {
+namespace Engine::Base {
 
     // C++17 用の軽量 span（std::span の代替）
     // - 非所有 (non-owning)

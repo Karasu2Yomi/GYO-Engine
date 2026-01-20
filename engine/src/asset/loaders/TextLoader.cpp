@@ -9,7 +9,7 @@ namespace Engine::Asset::Loaders {
     }
 
     Base::Result<Core::AnyAsset, AssetError>
-    TextLoader::Load(Detail::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
+    TextLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         // 空でもテキストとしてはOKだが、運用によってはエラーにしても良い
         auto txt = std::make_shared<TextAsset>();
 

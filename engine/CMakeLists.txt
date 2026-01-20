@@ -1,4 +1,6 @@
-add_library(engine STATIC)
+add_library(engine STATIC
+        include/engine/io/fs/IFileSystem.hpp
+        include/engine/io/fs/FileInfo.hpp)
 
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -10,6 +12,10 @@ target_sources(engine
     # io/path
     src/io/path/PathUtils.cpp
     src/io/path/Uri.cpp
+    # io/stream
+    src/io/stream/BufferedStream.cpp
+    src/io/stream/StreamReader.cpp
+    src/io/stream/StreamWriter.cpp
 
     # asset/catalog
     src/asset/catalog/CatalogParser.cpp

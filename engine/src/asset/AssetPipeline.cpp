@@ -39,7 +39,7 @@ namespace Engine::Asset::Loading {
         }
 
         auto& buf = bytesR.value();
-        Detail::ConstSpan<std::byte> bytes{ buf.data(), buf.size() };
+        Base::ConstSpan<std::byte> bytes{ buf.data(), buf.size() };
 
         // 3) decode/parse
         auto assetR = loader->Load(bytes, ctx);
