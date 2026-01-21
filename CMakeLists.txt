@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # (Optional) CLion向け: compile_commands.json を出す
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BUILD_TOOLS "Build tools (editor, etc.)" ON)
 option(BUILD_GAME  "Build game executable" ON)

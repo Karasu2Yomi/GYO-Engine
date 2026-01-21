@@ -57,11 +57,11 @@ TEST_CASE("AssetManager: sync load -> cache hit") {
     // --- 準備：catalog（resolvedPath はここでは “論理パス” をそのまま使う） ---
     AssetCatalog catalog;
     {
-        // ここはあなたの AssetCatalog の “手動登録” API があればそれを使うのが理想。
+        // ここは AssetCatalog の “手動登録” API があればそれを使うのが理想。
         // なければ catalog.json 経由のロードテストで代替してください。
     }
 
-    // --- pipeline 組み立て（あなたの実装に合わせて調整） ---
+    // --- pipeline 組み立て（実装に合わせて調整） ---
     Loading::LoaderRegistry registry;
     registry.Register(std::make_unique<Loaders::TextLoader>());
 

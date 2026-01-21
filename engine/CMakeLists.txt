@@ -1,6 +1,4 @@
-add_library(engine STATIC
-        include/engine/io/fs/IFileSystem.hpp
-        include/engine/io/fs/FileInfo.hpp)
+add_library(engine STATIC)
 
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -9,10 +7,21 @@ target_include_directories(engine PUBLIC
 target_sources(engine
     PRIVATE
     # base
+    # io/fs
+    src/io/fs/DirectoryIterator.cpp
+    src/io/fs/MountTable.cpp
+    src/io/fs/Vfs.cpp
+    # io/helpers
+    src/io/helpers/ReadAllBytes.cpp
+    src/io/helpers/ReadAllText.cpp
+    src/io/helpers/WriteAllBytes.cpp
+    src/io/helpers/WriteAllText.cpp
     # io/path
     src/io/path/PathUtils.cpp
     src/io/path/Uri.cpp
     # io/stream
+    src/io/stream/MemoryStream.cpp
+    src/io/stream/SpanStream.cpp
     src/io/stream/BufferedStream.cpp
     src/io/stream/StreamReader.cpp
     src/io/stream/StreamWriter.cpp
@@ -25,7 +34,6 @@ target_sources(engine
     src/asset/loaders/SoundLoader.cpp
     src/asset/loaders/TextLoader.cpp
     src/asset/loaders/TextureLoader.cpp
-
     # asset/
     src/asset/AssetCatalog.cpp
     src/asset/AssetManager.cpp

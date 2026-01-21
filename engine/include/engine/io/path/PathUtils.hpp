@@ -46,7 +46,7 @@ namespace Engine::IO::Path {
     bool IsAbsolutePathLike(std::string_view p);
 
     // scheme を剥がす（res:// / assets:// / asset:// など）
-    // - scheme 名は検証しない（あなたの現行実装と同じ方針）
+    // - scheme 名は検証しない（現行実装と同じ方針）
     // - "://"" 後の先頭スラッシュは削除して相対寄りにする
     std::string StripSchemeLoose(std::string_view p, bool& stripped);
 
@@ -55,7 +55,7 @@ namespace Engine::IO::Path {
 
     // "." / ".." を解決
     // - escapedAboveRoot=true: ".." によりスタックが空の状態でさらに pop しようとした
-    // - drive/UNC/unix absolute の prefix は維持（あなたの現行実装を踏襲）
+    // - drive/UNC/unix absolute の prefix は維持（現行実装を踏襲）
     std::string RemoveDotSegments(std::string_view path, bool& escapedAboveRoot);
 
 

@@ -56,7 +56,7 @@ namespace Engine::Asset {
     AssetCatalog::BuildFromRaw_(const std::vector<Catalog::RawCatalogEntry>& raw,
                                 const Resolver::AssetPathResolver& resolver) {
         for (const auto& r : raw) {
-            // ここはあなたの AssetId/AssetType 実装に合わせる
+            // ここは AssetId/AssetType 実装に合わせる
             // （FromString が無いなら、ここだけ差し替え）
             const AssetId id = AssetId::FromString(r.id);
             const AssetType type = AssetType::FromString(r.type);

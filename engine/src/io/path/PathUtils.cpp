@@ -278,7 +278,7 @@ namespace Engine::IO::Path {
             out.push_back(x);
         }
 
-        // 末尾の "/" は原則保持（あなたの現行方針）
+        // 末尾の "/" は原則保持（現行方針）
         return out;
     }
 
