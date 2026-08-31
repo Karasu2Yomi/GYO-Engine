@@ -1,20 +1,95 @@
-/.idea
-/build
-/third_party/nlohmann_json/nlohmann_json-build/
-/third_party/nlohmann_json/nlohmann_json-src/
-/third_party/nlohmann_json/nlohmann_json-tmp/
-/third_party/nlohmann_json/nlohmann_json-subbuild/
-/third_party/imgui/imgui-build/
-/third_party/imgui/imgui-src/
-/third_party/imgui/imgui-tmp/
-/third_party/imgui/imgui-subbuild/
-/third_party/sdl3/sdl3-build/
-/third_party/sdl3/sdl3-src/
-/third_party/sdl3/sdl3-tmp/
-/third_party/sdl3/sdl3-subbuild/
+# IDE and editor state
+/.idea/
+/.vs/
+/.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# CLion and CMake build trees
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/CTestTestfile.cmake
+/DartConfiguration.tcl
+/Makefile
+/build.ninja
+/rules.ninja
+/.ninja_deps
+/.ninja_log
+/Testing/
+/compile_commands.json
+/install_manifest.txt
+/CMakeUserPresets.json
+
+# Compiler and linker outputs
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+*.app
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.tlog
+*.d
+
+# Generated Visual Studio projects
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Test, profiling, and coverage output
+*.log
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+coverage/
+
+# FetchContent caches created beside dependency wrappers
 /third_party/doctest/doctest-build/
 /third_party/doctest/doctest-src/
+/third_party/doctest/doctest-subbuild/
 /third_party/doctest/doctest-tmp/
+/third_party/imgui/imgui-build/
+/third_party/imgui/imgui-src/
+/third_party/imgui/imgui-subbuild/
+/third_party/imgui/imgui-tmp/
+/third_party/nlohmann_json/nlohmann_json-build/
+/third_party/nlohmann_json/nlohmann_json-src/
+/third_party/nlohmann_json/nlohmann_json-subbuild/
+/third_party/nlohmann_json/nlohmann_json-tmp/
+/third_party/sdl3/sdl3-build/
+/third_party/sdl3/sdl3-src/
+/third_party/sdl3/sdl3-subbuild/
+/third_party/sdl3/sdl3-tmp/
+/third_party/sdl3_image/sdl3_image-build/
+/third_party/sdl3_image/sdl3_image-src/
+/third_party/sdl3_image/sdl3_image-subbuild/
+/third_party/sdl3_image/sdl3_image-tmp/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 
 
