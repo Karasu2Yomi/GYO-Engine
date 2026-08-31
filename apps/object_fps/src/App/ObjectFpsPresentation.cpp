@@ -1,5 +1,6 @@
 #include "RetroFPS/App/ObjectFpsPresentation.hpp"
 
+#include "RetroFPS/App/ObjectFpsUi.hpp"
 #include "RetroFPS/Rendering/EnemyRenderSettings.hpp"
 #include "RetroFPS/Rendering/MapGeometryGenerator.hpp"
 
@@ -7,15 +8,20 @@
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
 #include "engine/asset/AssetType.hpp"
+#include "engine/asset/loaders/FontAsset.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "render/IRenderDevice.hpp"
 #include "render/PrimitiveMesh.hpp"
 #include "render/RenderQueue.hpp"
+#include "text/ITextRasterizer.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <numbers>
 #include <span>
@@ -54,23 +60,61 @@ struct ObjectFpsPresentation::Impl final {
         std::uint32_t height{};
     };
 
+    struct TextCacheKey final {
+        std::string utf8;
+        float pointSize{};
+
+        friend bool operator==(
+            const TextCacheKey&,
+            const TextCacheKey&) noexcept = default;
+    };
+
+    struct TextCacheKeyHash final {
+        [[nodiscard]] std::size_t operator()(
+            const TextCacheKey& key) const noexcept {
+            const std::size_t textHash = std::hash<std::string>{}(key.utf8);
+            const std::size_t sizeHash = std::hash<float>{}(key.pointSize);
+            return textHash ^
+                   (sizeHash + 0x9e3779b97f4a7c15ULL +
+                    (textHash << 6U) + (textHash >> 2U));
+        }
+    };
+
+    struct TextResource final {
+        Engine::Render::TextureHandle gpu;
+        std::uint32_t width{};
+        std::uint32_t height{};
+    };
+
     Engine::Render::IRenderDevice* renderDevice{};
+    Engine::Text::ITextRasterizer* textRasterizer{};
     Engine::Asset::AssetManager* assets{};
     std::shared_ptr<const CampaignContent> content;
+    Engine::Asset::AssetHandle fontAsset;
+    std::shared_ptr<const Engine::Asset::Loaders::FontAsset> font;
     ObjectFpsPresentationConfig config;
     Engine::Render::MeshHandle quadXy;
     Engine::Render::MeshHandle quadXz;
     Engine::Render::MeshHandle cube;
     Engine::Render::MeshHandle skySphere;
     std::unordered_map<Engine::Asset::AssetId, TextureResource> textures;
+    std::unordered_map<TextCacheKey, TextResource, TextCacheKeyHash> textCache;
     std::vector<MapGeometry> stageGeometry;
     Engine::Render::RenderQueue queue;
+    std::size_t lastVisibleSubmissionCount{};
     bool initialized{};
 
     ~Impl() { Reset(); }
 
     void Reset() noexcept {
+        queue.Reset();
         if (renderDevice != nullptr) {
+            for (const auto& [key, text] : textCache) {
+                static_cast<void>(key);
+                if (text.gpu.IsValid()) {
+                    static_cast<void>(renderDevice->ReleaseTexture(text.gpu));
+                }
+            }
             for (const auto& [id, texture] : textures) {
                 static_cast<void>(id);
                 if (texture.gpu.IsValid()) {
@@ -95,16 +139,24 @@ struct ObjectFpsPresentation::Impl final {
                 static_cast<void>(id);
                 assets->Release(texture.asset);
             }
+            if (fontAsset.valid()) {
+                assets->Release(fontAsset);
+            }
         }
+        textCache.clear();
         textures.clear();
         stageGeometry.clear();
+        font.reset();
+        fontAsset.reset();
         quadXy = {};
         quadXz = {};
         cube = {};
         skySphere = {};
         content.reset();
         assets = nullptr;
+        textRasterizer = nullptr;
         renderDevice = nullptr;
+        lastVisibleSubmissionCount = 0;
         initialized = false;
     }
 
@@ -121,6 +173,108 @@ struct ObjectFpsPresentation::Impl final {
         }
         destination = result.value();
         return true;
+    }
+
+    [[nodiscard]] bool LoadFont(
+        const Engine::Asset::AssetId& id,
+        std::string& error) {
+        if (!id.IsValid()) {
+            error = "Object_FPS UI font asset id is invalid";
+            return false;
+        }
+
+        const auto load = assets->Load(
+            id,
+            Engine::Asset::AssetRequest::WithTypeHint(
+                Engine::Asset::AssetType::Font()));
+        if (!load) {
+            error = "failed to load UI font asset '" + AssetName(id) + "': " +
+                    load.error().message;
+            return false;
+        }
+
+        fontAsset = load.value();
+        font = assets->GetSharedConst<Engine::Asset::Loaders::FontAsset>(fontAsset);
+        if (!font || font->bytes.empty()) {
+            assets->Release(fontAsset);
+            fontAsset.reset();
+            font.reset();
+            error = "UI font asset '" + AssetName(id) +
+                    "' has no encoded font payload";
+            return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] const TextResource* ResolveText(
+        const UiTextCommand& command,
+        std::string& error) {
+        const TextCacheKey key{command.text, command.sizePixels};
+        const auto cached = textCache.find(key);
+        if (cached != textCache.end()) {
+            return &cached->second;
+        }
+        if (textRasterizer == nullptr || !font) {
+            error = "Object_FPS text presentation is not initialized";
+            return nullptr;
+        }
+
+        const std::span<const std::byte> encodedFont{
+            font->bytes.data(),
+            font->bytes.size(),
+        };
+        auto rasterized = textRasterizer->Rasterize(
+            encodedFont,
+            Engine::Text::TextRasterRequest{command.text, command.sizePixels});
+        if (!rasterized) {
+            error = "failed to rasterize Object_FPS UI text: " +
+                    rasterized.error().message;
+            return nullptr;
+        }
+
+        Engine::Text::TextBitmap& bitmap = rasterized.value();
+        const std::uint64_t tightRowPitch =
+            static_cast<std::uint64_t>(bitmap.width) * 4U;
+        const std::uint64_t precedingRows =
+            bitmap.height == 0 ? 0 : static_cast<std::uint64_t>(bitmap.height - 1U);
+        const std::uint64_t maximum =
+            (std::numeric_limits<std::uint64_t>::max)();
+        const bool byteCountOverflows =
+            precedingRows != 0 &&
+            static_cast<std::uint64_t>(bitmap.rowPitch) >
+                (maximum - tightRowPitch) / precedingRows;
+        const std::uint64_t requiredBytes = byteCountOverflows
+            ? maximum
+            : precedingRows * static_cast<std::uint64_t>(bitmap.rowPitch) +
+                  tightRowPitch;
+        if (bitmap.width == 0 || bitmap.height == 0 ||
+            static_cast<std::uint64_t>(bitmap.rowPitch) < tightRowPitch ||
+            byteCountOverflows || requiredBytes > bitmap.rgba8.size()) {
+            error = "text rasterizer returned an invalid RGBA8 bitmap";
+            return nullptr;
+        }
+
+        const Engine::Render::ImageView image{
+            bitmap.width,
+            bitmap.height,
+            bitmap.rowPitch,
+            std::span<const std::byte>{bitmap.rgba8.data(), bitmap.rgba8.size()},
+            Engine::Render::TextureColorSpace::Linear,
+        };
+        auto uploaded = renderDevice->CreateTexture(image);
+        if (!uploaded) {
+            error = "failed to upload Object_FPS UI text: " +
+                    uploaded.error().message;
+            return nullptr;
+        }
+
+        auto [inserted, wasInserted] = textCache.emplace(
+            key,
+            TextResource{uploaded.value(), bitmap.width, bitmap.height});
+        if (!wasInserted) {
+            static_cast<void>(renderDevice->ReleaseTexture(uploaded.value()));
+        }
+        return &inserted->second;
     }
 
     [[nodiscard]] bool LoadTexture(
@@ -200,6 +354,96 @@ struct ObjectFpsPresentation::Impl final {
             error = "Object_FPS produced an invalid GYO sprite submission: " +
                     result.error().message;
             return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool SubmitUiQuad(
+        const UiQuadCommand& quad,
+        std::string& error) {
+        if (quad.bounds.width <= 0.0F || quad.bounds.height <= 0.0F ||
+            quad.color.alpha <= 0.0F) {
+            return true;
+        }
+        Engine::Render::SpriteSubmission submission;
+        submission.destinationPixels = {
+            quad.bounds.x,
+            quad.bounds.y,
+            quad.bounds.width,
+            quad.bounds.height,
+        };
+        submission.tint = {
+            quad.color.red,
+            quad.color.green,
+            quad.color.blue,
+            quad.color.alpha,
+        };
+        return Submit(submission, error);
+    }
+
+    [[nodiscard]] bool SubmitUiText(
+        const UiTextCommand& text,
+        std::string& error) {
+        if (text.text.empty() || text.bounds.width <= 0.0F ||
+            text.bounds.height <= 0.0F || text.color.alpha <= 0.0F) {
+            return true;
+        }
+        const TextResource* resource = ResolveText(text, error);
+        if (resource == nullptr) {
+            return false;
+        }
+
+        const float width = static_cast<float>(resource->width);
+        const float height = static_cast<float>(resource->height);
+        float x = text.bounds.x;
+        switch (text.alignment) {
+        case UiTextAlignment::Left:
+            break;
+        case UiTextAlignment::Center:
+            x += (text.bounds.width - width) * 0.5F;
+            break;
+        case UiTextAlignment::Right:
+            x += text.bounds.width - width;
+            break;
+        }
+        const float y = text.bounds.y + (text.bounds.height - height) * 0.5F;
+
+        Engine::Render::SpriteSubmission submission;
+        submission.texture = resource->gpu;
+        submission.destinationPixels = {x, y, width, height};
+        submission.tint = {
+            text.color.red,
+            text.color.green,
+            text.color.blue,
+            text.color.alpha,
+        };
+        return Submit(submission, error);
+    }
+
+    [[nodiscard]] bool SubmitUi(
+        const GameSessionSnapshot& snapshot,
+        std::string& error) {
+        const ObjectFpsUiFrame ui = ObjectFpsUi::Build(
+            snapshot,
+            {0.0F, 0.0F, config.viewportWidth, config.viewportHeight});
+
+        std::size_t quadIndex = 0;
+        std::size_t textIndex = 0;
+        while (quadIndex < ui.quads.size() || textIndex < ui.texts.size()) {
+            const bool quadIsNext = textIndex == ui.texts.size() ||
+                (quadIndex < ui.quads.size() &&
+                 ui.quads[quadIndex].drawOrder < ui.texts[textIndex].drawOrder);
+            if (quadIsNext) {
+                if (!SubmitUiQuad(ui.quads[quadIndex], error)) {
+                    return false;
+                }
+                ++quadIndex;
+            } else {
+                if (!SubmitUiText(ui.texts[textIndex], error)) {
+                    return false;
+                }
+                ++textIndex;
+            }
         }
         return true;
     }
@@ -382,6 +626,7 @@ ObjectFpsPresentation& ObjectFpsPresentation::operator=(
 
 bool ObjectFpsPresentation::Initialize(
     Engine::Render::IRenderDevice& renderDevice,
+    Engine::Text::ITextRasterizer& textRasterizer,
     Engine::Asset::AssetManager& assets,
     std::shared_ptr<const CampaignContent> content,
     const ObjectFpsPresentationConfig& config,
@@ -396,9 +641,15 @@ bool ObjectFpsPresentation::Initialize(
         return false;
     }
     impl_->renderDevice = &renderDevice;
+    impl_->textRasterizer = &textRasterizer;
     impl_->assets = &assets;
     impl_->content = std::move(content);
     impl_->config = config;
+
+    if (!impl_->LoadFont(config.uiFont, error)) {
+        impl_->Reset();
+        return false;
+    }
 
     const auto sphere = Engine::Render::MakeUvSphere(16, 32);
     if (!sphere) {
@@ -459,6 +710,7 @@ bool ObjectFpsPresentation::Present(
     const GameSessionSnapshot& snapshot,
     std::string& error) {
     error.clear();
+    impl_->lastVisibleSubmissionCount = 0;
     if (!impl_->initialized) {
         error = "ObjectFpsPresentation is not initialized";
         return false;
@@ -491,6 +743,10 @@ bool ObjectFpsPresentation::Present(
         return false;
     }
 
+    if (!impl_->SubmitUi(snapshot, error)) {
+        return false;
+    }
+
     if (snapshot.fadeOpacity > 0.0F &&
         !impl_->Submit({
             {},
@@ -503,6 +759,9 @@ bool ObjectFpsPresentation::Present(
         return false;
     }
 
+    impl_->lastVisibleSubmissionCount =
+        impl_->queue.Meshes().size() + impl_->queue.Sprites().size();
+
     auto result = impl_->renderDevice->Render(impl_->queue);
     if (!result) {
         error = "GYO render device failed to present Object_FPS: " +
@@ -514,6 +773,10 @@ bool ObjectFpsPresentation::Present(
 
 bool ObjectFpsPresentation::IsInitialized() const noexcept {
     return impl_->initialized;
+}
+
+std::size_t ObjectFpsPresentation::LastVisibleSubmissionCount() const noexcept {
+    return impl_->lastVisibleSubmissionCount;
 }
 
 } // namespace fps

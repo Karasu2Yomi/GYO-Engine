@@ -12,6 +12,7 @@ get_filename_component(
 )
 
 add_library(object_fps_domain STATIC
+    src/App/ObjectFpsUi.cpp
     src/Collision/CombatCollision.cpp
     src/Collision/GridCollision.cpp
     src/Data/Csv.cpp
@@ -64,6 +65,7 @@ if(TARGET GYO::Engine)
             GYO::InputBackendSDL
             GYO::PlatformSDL
             GYO::Render
+            GYO::Text
     )
     target_compile_features(object_fps_app_support PUBLIC cxx_std_20)
     set_target_properties(object_fps_app_support PROPERTIES CXX_EXTENSIONS OFF)
@@ -75,7 +77,9 @@ if(TARGET GYO::Engine)
         target_compile_options(object_fps_app_support PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    if(TARGET GYO::AssetSdlImage AND TARGET GYO::RenderBackendSDLGPU)
+    if(TARGET GYO::AssetSdlImage AND
+       TARGET GYO::RenderBackendSDLGPU AND
+       TARGET GYO::TextBackendSDLTTF)
         add_executable(gyo_object_fps main.cpp)
         target_link_libraries(
             gyo_object_fps
@@ -85,6 +89,7 @@ if(TARGET GYO::Engine)
                 GYO::InputBackendSDL
                 GYO::PlatformSDL
                 GYO::RenderBackendSDLGPU
+                GYO::TextBackendSDLTTF
         )
         target_compile_features(gyo_object_fps PRIVATE cxx_std_20)
         target_compile_definitions(
@@ -113,6 +118,11 @@ if(TARGET GYO::Engine)
         if(BUILD_TESTING)
             add_test(NAME object_fps.smoke COMMAND gyo_object_fps --smoke-test)
             set_tests_properties(object_fps.smoke PROPERTIES TIMEOUT 30)
+            add_test(
+                NAME object_fps.menu_smoke
+                COMMAND gyo_object_fps --menu-smoke-test
+            )
+            set_tests_properties(object_fps.menu_smoke PROPERTIES TIMEOUT 30)
         endif()
     endif()
 endif()
@@ -129,6 +139,7 @@ endif()
 if(BUILD_TESTING)
     add_executable(object_fps_headless_tests
         tests/TestMain.cpp
+        tests/App/ObjectFpsUiTests.cpp
         tests/Collision/CollisionTests.cpp
         tests/Collision/CombatCollisionTests.cpp
         tests/Data/GameDataCatalogTests.cpp

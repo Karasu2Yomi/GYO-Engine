@@ -13,6 +13,11 @@ option(
     "Build the optional Windows/MSVC SDL_GPU render backend"
     OFF
 )
+option(
+    GYO_BUILD_SDL_TTF_ADAPTER
+    "Build the optional SDL_ttf-backed text rasterizer"
+    OFF
+)
 
 include(CTest)
 
@@ -23,6 +28,7 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL
 
 add_subdirectory(third_party)
 add_subdirectory(engine)
+add_subdirectory(text)
 
 if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS OR
    GYO_BUILD_SDL_GPU_BACKEND)

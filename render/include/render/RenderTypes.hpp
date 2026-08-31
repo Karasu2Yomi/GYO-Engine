@@ -91,6 +91,19 @@ struct UvTransform final {
     Float2 offset{};
 };
 
+// Sprite source rectangles use normalized texture coordinates with (x, y) at
+// the visual top-left. The shared XY quad reaches the top of screen space from
+// its v=1 vertices, so its V coordinate must be inverted inside that rectangle.
+// Keeping this conversion in the neutral render contract prevents individual
+// backends (or callers such as text presentation) from inventing ad-hoc flips.
+[[nodiscard]] constexpr UvTransform MakeSpriteUvTransform(
+    Rect sourceUv) noexcept {
+    return {
+        {sourceUv.width, -sourceUv.height},
+        {sourceUv.x, sourceUv.y + sourceUv.height},
+    };
+}
+
 struct MeshSubmission final {
     MeshHandle mesh{};
     TextureHandle texture{}; // invalid selects the backend's white texture
@@ -105,6 +118,7 @@ struct MeshSubmission final {
 struct SpriteSubmission final {
     TextureHandle texture{}; // invalid selects the backend's white texture
     Rect destinationPixels{};
+    // Normalized texture rectangle whose origin is the visual top-left.
     Rect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
     Float2 pivotNormalized{};
     float rotationRadians{};

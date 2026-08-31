@@ -8,6 +8,7 @@
 #include "engine/asset/core/AssetCachePolicy.hpp"
 #include "engine/asset/core/AssetLifetime.hpp"
 #include "engine/asset/core/AssetStorage.hpp"
+#include "engine/asset/loaders/FontLoader.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/AssetPipeline.hpp"
@@ -18,6 +19,7 @@
 #include "input/backend/sdl/SdlInput.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
 #include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -48,9 +50,12 @@ void LogError(const std::string& message) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", message.c_str());
 }
 
-[[nodiscard]] bool HasSmokeTestArgument(int argc, char* argv[]) {
+[[nodiscard]] bool HasArgument(
+    int argc,
+    char* argv[],
+    const std::string_view expected) {
     for (int index = 1; index < argc; ++index) {
-        if (std::string_view(argv[index]) == "--smoke-test") {
+        if (std::string_view(argv[index]) == expected) {
             return true;
         }
     }
@@ -78,6 +83,7 @@ int main(int argc, char* argv[]) {
     namespace SdlInput = Engine::Input::Backend::Sdl;
     namespace SdlPlatform = Engine::Platform::Sdl;
     namespace SdlGpu = Engine::Render::Backend::SdlGpu;
+    namespace SdlTtf = Engine::Text::Backend::SdlTtf;
 
     SdlPlatform::SdlPlatformOptions platformOptions;
     platformOptions.title = "Object_FPS — GYO Runtime Conformance Game";
@@ -99,6 +105,13 @@ int main(int argc, char* argv[]) {
     }
     auto renderDevice = std::move(renderResult).value();
 
+    auto textRasterizerResult = SdlTtf::SdlTtfTextRasterizer::Create();
+    if (!textRasterizerResult) {
+        LogError(textRasterizerResult.error());
+        return 1;
+    }
+    auto textRasterizer = std::move(textRasterizerResult).value();
+
     const std::filesystem::path assetRoot = ResolveAssetRoot();
     Asset::Resolver::AssetPathResolver::Options resolverOptions;
     resolverOptions.assetsRoot = assetRoot.string();
@@ -115,6 +128,12 @@ int main(int argc, char* argv[]) {
     }
 
     Asset::Loading::LoaderRegistry loaders;
+    auto fontLoaderResult =
+        loaders.Register(std::make_unique<Asset::Loaders::FontLoader>());
+    if (!fontLoaderResult) {
+        LogError(fontLoaderResult.error());
+        return 1;
+    }
     auto textLoaderResult =
         loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
     if (!textLoaderResult) {
@@ -152,7 +171,13 @@ int main(int argc, char* argv[]) {
     auto content = std::make_shared<const fps::CampaignContent>(
         std::move(*contentResult.content));
 
-    const bool smokeTest = HasSmokeTestArgument(argc, argv);
+    const bool smokeTest = HasArgument(argc, argv, "--smoke-test");
+    const bool menuSmokeTest = HasArgument(argc, argv, "--menu-smoke-test");
+    if (smokeTest && menuSmokeTest) {
+        LogError(std::string{
+            "--smoke-test and --menu-smoke-test are mutually exclusive"});
+        return 2;
+    }
     fps::GameSessionConfig sessionConfig;
     if (smokeTest) {
         sessionConfig.fadeOutSeconds = 0.0001F;
@@ -165,6 +190,7 @@ int main(int argc, char* argv[]) {
     std::string error;
     if (!presentation.Initialize(
             *renderDevice,
+            *textRasterizer,
             assets,
             content,
             presentationConfig,
@@ -174,12 +200,18 @@ int main(int argc, char* argv[]) {
     }
 
     SdlInput::SdlInput input(*platform);
+    fps::ObjectFpsRuntimeClientConfig runtimeConfig;
+    runtimeConfig.startCampaignImmediately = smokeTest;
+    runtimeConfig.stopAfterFirstPlayingFrame = smokeTest;
+    runtimeConfig.stopAfterFirstMenuFrame = menuSmokeTest;
+    runtimeConfig.viewportWidth = presentationConfig.viewportWidth;
+    runtimeConfig.viewportHeight = presentationConfig.viewportHeight;
     fps::ObjectFpsRuntimeClient client(
         *platform,
         input,
         assets,
         presentation,
-        {smokeTest, smokeTest});
+        runtimeConfig);
     if (!client.Initialize(content, sessionConfig, error)) {
         LogError(error);
         return 1;

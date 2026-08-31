@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "SdlGpuEmbeddedShaders.hpp"
 #include "render/PrimitiveMesh.hpp"
 
 namespace Engine::Render::Backend::SdlGpu {
@@ -28,52 +29,6 @@ namespace {
 using Microsoft::WRL::ComPtr;
 
 constexpr SDL_GPUTextureFormat kDepthFormat = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
-
-constexpr std::string_view kVertexShaderSource = R"hlsl(
-cbuffer VertexUniforms : register(b0, space1)
-{
-    row_major float4x4 worldViewProjection;
-};
-
-struct VertexOutput
-{
-    float4 position : SV_POSITION;
-    float2 uv : TEXCOORD0;
-};
-
-VertexOutput main(float3 position : TEXCOORD0, float2 uv : TEXCOORD1)
-{
-    VertexOutput output;
-    output.position = mul(float4(position, 1.0f), worldViewProjection);
-    output.uv = uv;
-    return output;
-}
-)hlsl";
-
-constexpr std::string_view kFragmentShaderSource = R"hlsl(
-Texture2D<float4> colorTexture : register(t0, space2);
-SamplerState colorSampler : register(s0, space2);
-
-cbuffer FragmentUniforms : register(b0, space3)
-{
-    float4 tint;
-    float4 uvScaleOffset;
-    float alphaCutoff;
-    float3 fragmentPadding;
-};
-
-float4 main(float4 position : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
-{
-    const float2 transformedUv =
-        uv * uvScaleOffset.xy + uvScaleOffset.zw;
-    const float4 color = colorTexture.Sample(colorSampler, transformedUv) * tint;
-    if (alphaCutoff >= 0.0f)
-    {
-        clip(color.a - alphaCutoff);
-    }
-    return color;
-}
-)hlsl";
 
 struct Matrix4 final {
     float values[4][4]{};
@@ -554,12 +509,19 @@ struct SdlGpuRenderDevice::Impl final {
         using Result = Base::Result<void, RenderError>;
 
         auto vertexBytecode = CompileShader(
-            kVertexShaderSource, "gyo_unlit.vert.hlsl", "vs_5_1", debugMode);
+            EmbeddedShaders::kUnlitVertexSource,
+            EmbeddedShaders::kUnlitVertexName.data(),
+            "vs_5_1",
+            debugMode);
         if (!vertexBytecode) {
             return Result::Err(std::move(vertexBytecode).error());
         }
+
         auto fragmentBytecode = CompileShader(
-            kFragmentShaderSource, "gyo_unlit.frag.hlsl", "ps_5_1", debugMode);
+            EmbeddedShaders::kUnlitFragmentSource,
+            EmbeddedShaders::kUnlitFragmentName.data(),
+            "ps_5_1",
+            debugMode);
         if (!fragmentBytecode) {
             return Result::Err(std::move(fragmentBytecode).error());
         }
@@ -1280,10 +1242,7 @@ struct SdlGpuRenderDevice::Impl final {
         };
         const FragmentUniforms fragmentUniforms = MakeFragmentUniforms(
             submission.tint,
-            {
-                {submission.sourceUv.width, submission.sourceUv.height},
-                {submission.sourceUv.x, submission.sourceUv.y},
-            },
+            MakeSpriteUvTransform(submission.sourceUv),
             -1.0F);
         SDL_PushGPUVertexUniformData(
             command, 0, &vertexUniforms, sizeof(vertexUniforms));

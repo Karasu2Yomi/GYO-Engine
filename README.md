@@ -28,6 +28,7 @@ GYO-Engine/
 ├─ third_party/                                  dependency wrappers
 │  ├─ sdl3/                                      [implemented]
 │  ├─ sdl3_image/                                [this milestone; optional PNG decode]
+│  ├─ sdl3_ttf/                                  [this milestone; optional font rasterization]
 │  ├─ nlohmann_json/                             [implemented; asset catalogs]
 │  ├─ imgui/                                     [implemented; Sandbox only]
 │  └─ doctest/                                   [implemented; tests only]
@@ -45,6 +46,8 @@ GYO-Engine/
 │  │  │  │  ├─ LoaderRegistry.hpp
 │  │  │  │  └─ AssetPipeline.hpp
 │  │  │  └─ loaders/
+│  │  │     ├─ FontAsset.hpp                     [this milestone; encoded font bytes]
+│  │  │     ├─ FontLoader.hpp                    [implemented; bytes -> FontAsset]
 │  │  │     ├─ TextureAsset.hpp                  CPU-side decoded pixels
 │  │  │     └─ sdl_image/                        [this milestone; optional loader]
 │  │  └─ runtime/                                [this milestone]
@@ -70,6 +73,13 @@ GYO-Engine/
 │  │  └─ SdlInput                                SDL events -> physical input
 │  └─ tests/                                     [this milestone]
 │
+├─ text/                                         minimal font/text mechanism
+│  ├─ include/text/                              [this milestone; backend-neutral]
+│  │  ├─ ITextRasterizer.hpp                     encoded font + UTF-8 run -> RGBA8 bitmap
+│  │  ├─ TextTypes.hpp                          request and owning CPU bitmap
+│  │  └─ TextError.hpp
+│  └─ backend/sdl_ttf/                           [this milestone; optional adapter]
+│
 ├─ render/                                       renderer contract and implementations
 │  ├─ include/render/                            [this milestone; backend-neutral]
 │  │  ├─ RenderQueue.hpp
@@ -79,6 +89,7 @@ GYO-Engine/
 │  ├─ backend/
 │  │  ├─ sdl/                                    [this milestone; clear/present adapter]
 │  │  ├─ sdl_gpu/                                [this milestone; optional Windows/MSVC]
+│  │  │  └─ shaders/                             standalone backend-owned HLSL sources
 │  │  ├─ dx12/                                   [on demand; not created]
 │  │  ├─ vulkan/                                 [on demand; not created]
 │  │  └─ opengl/                                 [on demand; not created]
@@ -92,15 +103,17 @@ GYO-Engine/
 ├─ apps/                                         composition roots and concrete games
 │  ├─ runtime/                                   [this milestone] minimal clear/present app
 │  ├─ sandbox/                                   [this milestone; optional ImGui demo]
-│  └─ object_fps/                                [this milestone; opt-in conformance slice]
+│  └─ object_fps/                                [this milestone; active conformance slice]
 │     ├─ include/RetroFPS/                       Object_FPS policy/domain types
 │     ├─ src/                                    adapters use GYO contracts directly
-│     └─ tests/                                  headless game-policy tests
+│     │  └─ App/ObjectFpsUi.cpp                  game-owned menu/HUD layout and hit testing
+│     └─ tests/                                  headless game-policy and UI-command tests
 │
 ├─ assets/                                       game-owned runtime content
 │  ├─ object_fps/                                [this milestone]
 │  │  ├─ asset_catalog.json
 │  │  ├─ data/                                   campaign/enemy/weapon definitions
+│  │  ├─ fonts/                                  game-selected UI font and license
 │  │  ├─ maps/                                   current conformance fixtures
 │  │  └─ textures/
 │  └─ <game_id>/                                 [on demand; one isolated root per game]
@@ -121,10 +134,10 @@ There is deliberately no `systems/` catch-all. Update frequency is an execution 
 
 Requirements are CMake 3.30 or newer and a C++20 compiler. The first configure may fetch the enabled third-party dependencies into the selected build tree.
 
-Build the default standalone runtime and tests:
+Build the standalone runtime and tests without the Object_FPS conformance game:
 
 ```sh
-cmake -S . -B build -DGYO_BUILD_RUNTIME=ON -DGYO_BUILD_SANDBOX=OFF
+cmake -S . -B build -DGYO_BUILD_RUNTIME=ON -DGYO_BUILD_OBJECT_FPS=OFF -DGYO_BUILD_SANDBOX=OFF
 cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
@@ -132,25 +145,28 @@ ctest --test-dir build -C Debug --output-on-failure
 Build the Object_FPS conformance slice in a separate build tree:
 
 ```sh
-cmake -S . -B build-object-fps -DGYO_BUILD_OBJECT_FPS=ON -DGYO_BUILD_SANDBOX=OFF
+cmake -S . -B build-object-fps -DGYO_BUILD_OBJECT_FPS=ON -DGYO_BUILD_RUNTIME=OFF -DGYO_BUILD_SANDBOX=OFF
 cmake --build build-object-fps --config Debug
 ctest --test-dir build-object-fps -C Debug --output-on-failure
 ```
 
-The current Object_FPS presentation path selects the SDL_GPU backend and therefore requires Windows with MSVC. The game option also enables the optional SDL_image PNG decoder. This is a current backend constraint, not a dependency from GYO Core to Windows, SDL_GPU, or Object_FPS.
+The current Object_FPS presentation path selects the SDL_GPU backend and therefore requires Windows with MSVC. The game option also selects the optional SDL_image PNG decoder and SDL_ttf text rasterizer. SDL_ttf itself is an optional infrastructure adapter; the Windows/MSVC restriction comes from the current SDL_GPU implementation, not from GYO Core, `GYO::Text`, or Object_FPS policy.
+
+The repository currently defaults `GYO_BUILD_OBJECT_FPS` to `ON` because the MVP is the active conformance consumer. Set it to `OFF` for a core-only, standalone-runtime-only, or backend-module build.
 
 Build switches are responsibility-based:
 
 | Option | Default | Effect |
 |---|---:|---|
-| `GYO_BUILD_RUNTIME` | `ON` | Builds the standalone SDL window/clear-present composition root. |
+| `GYO_BUILD_RUNTIME` | `OFF` | Builds the standalone SDL window/clear-present composition root. |
 | `GYO_BUILD_SANDBOX` | `OFF` | Adds the optional ImGui/JSON demonstration app. |
-| `GYO_BUILD_OBJECT_FPS` | `OFF` | Adds the Object_FPS GYO-conformance game, its isolated assets, and required optional adapters. |
+| `GYO_BUILD_OBJECT_FPS` | `ON` | Adds the Object_FPS GYO-conformance game, its isolated assets, and required optional adapters. |
 | `GYO_BUILD_SDL_GPU_BACKEND` | `OFF` | Builds the current Windows/MSVC SDL_GPU implementation of `IRenderDevice`. |
 | `GYO_BUILD_SDL_IMAGE_LOADER` | `OFF` | Builds the SDL_image-backed runtime PNG texture loader. |
+| `GYO_BUILD_SDL_TTF_ADAPTER` | `OFF` | Builds the SDL_ttf implementation of the neutral text-rasterizer contract; Object_FPS also selects it. |
 | `BUILD_TESTING` | `ON` | Adds doctest targets registered with CTest. |
 
-With all application and optional adapter/decoder options disabled, the backend-neutral Engine and its tests do not require SDL, SDL_image, ImGui, or Object_FPS. Optional decoders and backends are selected at the outer build/composition layer.
+With all application and optional adapter/decoder options disabled, the backend-neutral Engine, `GYO::Text` contract, and their tests do not require SDL, SDL_image, SDL_ttf, ImGui, or Object_FPS. Optional decoders and backends are selected at the outer build/composition layer.
 
 ## Responsibility at a glance
 
@@ -164,7 +180,10 @@ Current examples:
 
 - SDL reports keys, buttons, pointer motion, and focus; `SdlInput` translates them into a GYO physical frame; `InputActionMap` produces named actions and axes; Object_FPS decides how those actions move, aim, fire, reload, pause, or navigate menus.
 - `NativeFileAssetSource` reads catalog-resolved runtime files; the optional SDL_image loader decodes image bytes into a CPU-side `TextureAsset`; `AssetManager` owns identity, handles, cache/lifetime, and loader dispatch; the selected render device alone creates GPU textures.
+- `FontLoader` keeps encoded font bytes in a backend-neutral `FontAsset`; `ITextRasterizer` converts a borrowed font byte span and one UTF-8 text run into an owning CPU-side RGBA8 `TextBitmap`; the optional SDL_ttf adapter implements that contract without exposing `TTF_Font`, `SDL_Surface`, or `SDL_Texture`. The render device uploads the bitmap and the existing sprite submission path draws it.
 - Object_FPS projects its immutable game snapshot into GYO `RenderQueue` submissions. `IRenderDevice` owns opaque render handles and executes the queue; backend-native SDL_GPU, D3D12, or shader details remain private to the backend.
+
+This is deliberately not a general UI framework. GYO does not currently provide widgets, focus traversal, layout trees, a glyph-atlas manager, rich text, wrapping, or a global text cache. Those remain deferred until a concrete consumer establishes their ownership and performance requirements.
 
 ## Object_FPS is a conformance consumer
 
@@ -183,6 +202,25 @@ selected SDL platform / SDL_GPU / SDL_image infrastructure
 When the old game exposed a reusable need, the neutral mechanism was added to GYO first and Object_FPS then consumed it. Object_FPS does not carry a parallel input framework, resource manager, renderer contract, or application loop, and its game-specific names and state remain outside GYO Core.
 
 The current maps and CSV files are conformance fixtures, not hard-coded engine knowledge. Asset IDs are catalogued under the `object_fps.*` namespace and the campaign data determines which content is used.
+
+### Visible MVP flow
+
+Object_FPS now owns and renders the content, layout, colors, selected state, and actions for:
+
+- MainMenu: Start Game, Controls, and Quit.
+- Controls: visible input instructions and Back.
+- Pause: Resume, Main Menu, and Quit over the game view.
+- Results: campaign outcome, room results, and return to Main Menu.
+- Playing HUD: crosshair, HP, magazine/reserve ammunition, reload state, and current stage status.
+
+Keyboard action navigation and absolute-pointer menu hit testing use the same game-owned layout definitions. GYO supplies input actions, font/text rasterization, texture ownership, and render submission; it does not know what an Object_FPS menu item means.
+
+Two executable smoke paths cover different boundaries:
+
+- `object_fps.smoke` enters Playing and verifies a world frame can be submitted and presented.
+- `object_fps.menu_smoke` uses ordinary MainMenu startup and fails if the first menu frame has no visible UI submission.
+
+Headless `ObjectFpsUi` tests additionally verify screen text, HUD commands, viewport-scaled layout, menu hit targets, and rejection of invalid pointer coordinates without depending on SDL_ttf or a render backend.
 
 ## Runtime Boundary and Weaver
 
@@ -207,7 +245,7 @@ Weaver is not implemented here. It is an optional external high-level runtime an
 
 ## Growth rule
 
-A feature is added where its responsibility belongs. New Font, Render3D, Physics3D, Navigation, or external-controller integration should normally add a module, backend, or adapter rather than rewrite unrelated Asset, Input, Render, Runtime, or game code.
+A feature is added where its responsibility belongs. A new text backend, Render3D, Physics3D, Navigation, or external-controller integration should normally add a module, backend, or adapter rather than rewrite unrelated Asset, Input, Render, Runtime, or game code.
 
 Do not pre-create editor ecosystems, node trees, universal ECS layers, visual scripting, plugin frameworks, full RenderGraphs, complete physics engines, large DI containers, generic managers, or empty interfaces. An abstraction enters the repository only when current code gives it a concrete responsibility and a real caller.
 

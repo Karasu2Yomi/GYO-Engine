@@ -6,6 +6,7 @@
 #include "RetroFPS/World/GridMapLoader.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -190,6 +191,40 @@ void TestSessionCommandsSnapshotsAndEvents(TestContext& context) {
     context.Expect(
         session.Snapshot().screen == GameScreen::Playing,
         "resume returns the session to its active stage");
+
+    context.Expect(
+        session.Advance(0.0F, {}, std::span{&pause, 1}, error),
+        "session can pause again before testing local resume input");
+    const std::uint32_t ammoBeforeLocalResume =
+        session.Snapshot().weapon.magazineAmmo;
+    const Float2 positionBeforeLocalResume = session.Snapshot().player.has_value()
+        ? session.Snapshot().player->position
+        : Float2{};
+    GameFrameInput resumeInput;
+    resumeInput.backPressed = true;
+    resumeInput.moveForward = 1.0F;
+    resumeInput.fireHeld = true;
+    resumeInput.firePressed = true;
+    context.Expect(
+        session.Advance(0.0F, resumeInput, {}, error) &&
+            session.Snapshot().screen == GameScreen::Playing,
+        "escape resumes through the local GameFlow path");
+
+    GameFrameInput heldAfterResume;
+    heldAfterResume.moveForward = 1.0F;
+    heldAfterResume.fireHeld = true;
+    heldAfterResume.firePressed = true;
+    context.Expect(
+        session.Advance(0.05F, heldAfterResume, {}, error),
+        "first held-input frame after local resume advances safely");
+    context.Expect(
+        session.Snapshot().weapon.magazineAmmo == ammoBeforeLocalResume,
+        "local resume requires fire release before gameplay accepts another shot");
+    context.Expect(
+        session.Snapshot().player.has_value() &&
+            session.Snapshot().player->position.x == positionBeforeLocalResume.x &&
+            session.Snapshot().player->position.z == positionBeforeLocalResume.z,
+        "local resume requires movement release before gameplay moves the player");
 
     const GameSessionCommand quit = RequestQuitCommand{};
     context.Expect(

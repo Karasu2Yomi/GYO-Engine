@@ -8,6 +8,15 @@ namespace {
 
 using namespace Engine::Render;
 
+[[nodiscard]] constexpr Float2 TransformUv(
+    UvTransform transform,
+    Float2 uv) noexcept {
+    return {
+        uv.x * transform.scale.x + transform.offset.x,
+        uv.y * transform.scale.y + transform.offset.y,
+    };
+}
+
 TEST_CASE("RenderQueue stores neutral mesh and sprite submissions in order") {
     RenderQueue queue({Color{0.1F, 0.2F, 0.3F, 1.0F}});
     queue.SetCamera(PerspectiveCamera3D{});
@@ -31,6 +40,42 @@ TEST_CASE("RenderQueue stores neutral mesh and sprite submissions in order") {
     REQUIRE(queue.Sprites().size() == 1);
     CHECK(queue.Sprites()[0].destinationPixels.x == doctest::Approx(10.0F));
     CHECK(queue.Camera().has_value());
+}
+
+TEST_CASE("Sprite source UV maps visual top-left for full textures") {
+    const UvTransform transform =
+        MakeSpriteUvTransform({0.0F, 0.0F, 1.0F, 1.0F});
+
+    // The shared XY quad's v=1 vertices appear at the top in screen space.
+    const Float2 topLeft = TransformUv(transform, {0.0F, 1.0F});
+    const Float2 topRight = TransformUv(transform, {1.0F, 1.0F});
+    const Float2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
+
+    CHECK(topLeft.x == doctest::Approx(0.0F));
+    CHECK(topLeft.y == doctest::Approx(0.0F));
+    CHECK(topRight.x == doctest::Approx(1.0F));
+    CHECK(topRight.y == doctest::Approx(0.0F));
+    CHECK(bottomRight.x == doctest::Approx(1.0F));
+    CHECK(bottomRight.y == doctest::Approx(1.0F));
+}
+
+TEST_CASE("Sprite source UV preserves atlas sub-rectangle boundaries") {
+    const UvTransform transform =
+        MakeSpriteUvTransform({0.25F, 0.125F, 0.5F, 0.25F});
+
+    const Float2 topLeft = TransformUv(transform, {0.0F, 1.0F});
+    const Float2 topRight = TransformUv(transform, {1.0F, 1.0F});
+    const Float2 bottomLeft = TransformUv(transform, {0.0F, 0.0F});
+    const Float2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
+
+    CHECK(topLeft.x == doctest::Approx(0.25F));
+    CHECK(topLeft.y == doctest::Approx(0.125F));
+    CHECK(topRight.x == doctest::Approx(0.75F));
+    CHECK(topRight.y == doctest::Approx(0.125F));
+    CHECK(bottomLeft.x == doctest::Approx(0.25F));
+    CHECK(bottomLeft.y == doctest::Approx(0.375F));
+    CHECK(bottomRight.x == doctest::Approx(0.75F));
+    CHECK(bottomRight.y == doctest::Approx(0.375F));
 }
 
 TEST_CASE("RenderQueue rejects invalid handles and non-finite presentation data") {

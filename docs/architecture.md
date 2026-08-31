@@ -23,11 +23,11 @@ Concrete Game / Application composition root
                     |
                     v
           GYO public mechanisms
-  Runtime / Input / Asset / Render contracts
+ Runtime / Input / Asset / Text / Render contracts
                     |
                     v
           selected outer adapters
-     SDL platform / SDL input / renderer
+ SDL platform / SDL input / SDL_ttf / renderer
                     |
                     v
         SDL / OS / graphics APIs
@@ -53,7 +53,7 @@ Normative dependency rules:
 - A backend implements an engine-facing contract; the application composition root selects and connects it.
 - `platform/` owns host/window/event integration, not graphics implementations.
 - Asset code must not create renderer or GPU resources.
-- Public input, asset, render, and runtime-facing types must not expose SDL, Vulkan, DX12, OpenGL, or native OS pointers.
+- Public input, asset, text, render, and runtime-facing types must not expose SDL, SDL_ttf, Vulkan, DX12, OpenGL, or native OS pointers.
 - Optional games, decoders, backends, and future modules must be removable without forcing unrelated modules to change.
 
 There is no architectural `systems/` layer. “Runs every frame” describes execution frequency, not ownership. Each capability belongs to a responsibility-based module such as `input/`, `audio/`, `animation/`, `collision/`, or `navigation/` when that responsibility is actually implemented.
@@ -70,7 +70,7 @@ The conformance rule is:
 4. Do not preserve a parallel KamataEngine input, asset, rendering, or main-loop layer merely to make the old source layout compile.
 5. Do not add Object_FPS names, campaign assumptions, or game policy to GYO Core.
 
-The standard is therefore GYO's: `IRuntimeClient` defines frame participation, `InputActionMap` defines action/axis evaluation, `AssetId`/`AssetHandle` and `AssetManager` define runtime asset ownership, `RenderQueue`/`IRenderDevice` define rendering submission, and `IRuntimePort` defines the typed observation/intent seam. Object_FPS supplies only the domain payload and policy needed to use those mechanisms.
+The standard is therefore GYO's: `IRuntimeClient` defines frame participation, `InputActionMap` defines action/axis evaluation, `AssetId`/`AssetHandle` and `AssetManager` define runtime asset ownership, `ITextRasterizer`/`TextBitmap` define neutral font raster output, `RenderQueue`/`IRenderDevice` define rendering submission, and `IRuntimePort` defines the typed observation/intent seam. Object_FPS supplies only the domain payload and policy needed to use those mechanisms.
 
 Repository ownership follows the same rule:
 
@@ -90,6 +90,7 @@ There is no shared global bucket where every game's stages, textures, or data ac
 |---|---|---|
 | SDL key/button/pointer events | physical input snapshot, named action/axis mapping | what Move, Fire, Reload, or Pause does |
 | Filesystem and image decoder | asset source, ID, handle, catalog, cache/lifetime, loader dispatch | which texture or data asset belongs to a stage/enemy/weapon |
+| Font bytes and SDL_ttf | encoded `FontAsset`, neutral text-raster request/bitmap contract | which strings, sizes, rectangles, colors, alignment, selection, and actions a screen uses |
 | SDL_GPU or another graphics API | opaque render handles, resource creation, render queue execution | which world surfaces, enemies, projectiles, and overlays are submitted |
 | Host clock and event pump | deterministic runtime lifecycle | state transition and gameplay update policy |
 
@@ -102,13 +103,15 @@ This exploration milestone builds a small but connected runtime skeleton:
 - Existing `base/`, `io/`, and asset identity/cache/loading mechanisms remain in place.
 - `NativeFileAssetSource` supplies catalog-resolved runtime bytes from the native filesystem.
 - The optional SDL_image loader decodes PNG bytes to a CPU-side RGBA `TextureAsset`; it does not create GPU resources.
+- `FontLoader` retains engine-ready TTF/OTF bytes in a backend-neutral `FontAsset` without creating a native font object.
+- `GYO::Text` defines the synchronous `TextRasterRequest`/owning RGBA8 `TextBitmap` contract; the optional SDL_ttf adapter implements it without exposing SDL or SDL_ttf types.
 - `RuntimeLoop` owns deterministic frame lifecycle order.
 - `IRuntimePort<Snapshot, Command, Event>` supplies a minimal typed Query/Command/Event seam.
 - `SdlPlatform` owns SDL process/window/event lifecycle.
 - GYO input owns physical-frame and action-map semantics; `SdlInput` is only the SDL event adapter.
 - GYO render owns opaque handles, primitive mesh data, `RenderQueue`, and `IRenderDevice`; concrete SDL rendering stays under `render/backend/`.
 - The optional Windows/MSVC SDL_GPU backend exercises mesh, texture, sprite, and 3D submission without leaking native handles into game-facing contracts.
-- `apps/object_fps` and `assets/object_fps` exercise those mechanisms as an opt-in concrete game vertical slice.
+- `apps/object_fps` and `assets/object_fps` exercise those mechanisms as the active, separately removable concrete game vertical slice, including game-owned screen/HUD policy projected through the neutral Text and Render seams.
 - `apps/runtime` remains a small standalone SDL clear/present composition root, while `apps/sandbox` keeps optional ImGui demonstration concerns separate.
 
 `RuntimeLoop` calls an injected `IRuntimeClient` in this order:
@@ -119,7 +122,7 @@ ProcessEvents(frame) -> Update(frame) -> Render(frame)
 
 `FrameContext` carries the frame index and delta time. `RuntimeControl::Stop` terminates at the phase that requests it.
 
-This milestone does **not** claim a complete ordinary-game engine. Scene management, audio playback, text presentation, animation, physics, navigation, generalized world/entity queries, remote control, and Weaver remain outside the implemented set.
+This milestone does **not** claim a complete ordinary-game engine. It includes only bounded whole-run text rasterization and sprite presentation, not a general text-layout ecosystem. Scene management, audio playback, animation, physics, navigation, generalized world/entity queries, remote control, and Weaver remain outside the implemented set.
 
 ## 6. Responsibility map
 
@@ -136,7 +139,7 @@ Does:
 Depends On:
   - C++ standard library
 Must Not Depend On:
-  - Asset, Runtime, Platform, Input, Render, Game, or Weaver
+  - Asset, Runtime, Platform, Input, Text, Render, Game, or Weaver
 ```
 
 ### IO (`implemented`)
@@ -151,7 +154,7 @@ Depends On:
   - Base
   - native filesystem implementation details behind its IO surface
 Must Not Depend On:
-  - asset types, render resources, scenes, concrete games, or Weaver
+  - asset types, text rasterization, render resources, scenes, concrete games, or Weaver
 ```
 
 ### Asset identity, catalog, cache, and dispatch (`implemented`)
@@ -210,6 +213,66 @@ Must Not Depend On:
 ```
 
 Only PNG is enabled for the current fixture set. Broader codec support is not implied.
+
+### Encoded font asset (`this milestone`)
+
+```yaml
+Module: FontLoader / FontAsset
+Owns:
+  - engine-ready encoded TTF/OTF bytes in the runtime asset cache
+Does:
+  - load non-empty font bytes through the ordinary Asset loader contract
+  - keep native font-library objects out of AssetManager records
+Depends On:
+  - GYO Asset loader and Font AssetType contracts
+Must Not Depend On:
+  - SDL_ttf, a render device, UI layout, concrete games, or Weaver
+Must Not Do:
+  - glyph rasterization, text layout, GPU upload, or screen policy
+```
+
+### Neutral text raster mechanism (`this milestone`)
+
+```yaml
+Module: GYO::Text
+Owns:
+  - TextRasterRequest { UTF-8 run, point size }
+  - owning straight-alpha RGBA8 TextBitmap values
+  - the ITextRasterizer boundary
+Does:
+  - define how encoded font bytes are synchronously converted into a CPU bitmap
+  - keep raster output consumable by any renderer through neutral pixel data
+Depends On:
+  - Engine Base Result/Error values
+  - backend-neutral encoded font bytes supplied by the caller
+Must Not Depend On:
+  - SDL, SDL_ttf, SDL_GPU, a concrete render backend, Object_FPS, or Weaver
+Must Not Own:
+  - game strings, layout rectangles, color, selection, hit testing, or actions
+```
+
+The current request is intentionally one complete UTF-8 run at one point size. It is a real, bounded mechanism, not a claim of a universal font-layout or retained-text system.
+
+### SDL_ttf text raster adapter (`this milestone`, optional)
+
+```yaml
+Module: GYO::TextBackendSDLTTF
+Owns:
+  - SDL_ttf initialization and shutdown pairing
+  - temporary SDL IO stream, TTF font, and surface lifetimes during Rasterize
+  - conversion of SDL_ttf output to the neutral TextBitmap contract
+Does:
+  - implement ITextRasterizer from borrowed encoded font bytes
+Depends On:
+  - GYO::Text
+  - SDL and SDL_ttf infrastructure
+Must Not Depend On:
+  - IRenderDevice, SDL_GPU, AssetManager policy, Object_FPS UI policy, or Weaver
+Must Not Expose:
+  - TTF_Font, SDL_Surface, SDL_Texture, SDL_GPUTexture, or other native handles
+```
+
+SDL_ttf is selected only when this optional adapter or the Object_FPS conformance application requires it. GYO Core and `GYO::Text` remain usable without SDL_ttf.
 
 ### Runtime lifecycle (`this milestone`)
 
@@ -305,7 +368,8 @@ Depends On:
   - Engine Base Result/Error values
   - C++ standard library
 Must Not Depend On:
-  - SDL, SDL_GPU, DX12, Vulkan, OpenGL, or native resource types
+  - Text rasterizers or layout policy
+  - SDL, SDL_ttf, SDL_GPU, DX12, Vulkan, OpenGL, or native resource types
   - concrete game content or Weaver
 ```
 
@@ -340,16 +404,22 @@ Owns:
   - translation of opaque GYO handles and RenderQueue submissions
 Does:
   - implement IRenderDevice for the current mesh/sprite/3D vertical slice
+  - compile backend-owned standalone HLSL sources into the current DXBC pipeline
 Depends On:
   - GYO::Render
   - concrete SDL platform/window integration
   - SDL_GPU and private Windows shader/backend details
 Must Not Depend On:
   - Object_FPS state or asset catalog policy
+  - SDL_ttf or text-layout policy
   - Weaver
 Must Not Expose:
   - SDL_GPU, D3D12, command-buffer, descriptor, or shader handles through GYO APIs
 ```
+
+The HLSL files under `render/backend/sdl_gpu/shaders/` are the only shader sources. CMake reads them into a generated, backend-private build-tree header so static-library consumers do not depend on a working directory or runtime file deployment; `D3DCompile` remains a private SDL_GPU initialization detail. Editing either HLSL file triggers CMake regeneration and recompilation of the backend.
+
+`SpriteSubmission::sourceUv` uses a visual top-left origin. The SDL_GPU path converts that rectangle once through `MakeSpriteUvTransform`, including atlas sub-rectangles, because its shared XY quad reaches screen-top at `v=1`. Text rasterization and texture upload preserve row order and must not compensate for backend sprite orientation.
 
 Its Windows/MSVC limitation is an implementation constraint of this optional backend, not a platform requirement of GYO Core.
 
@@ -372,22 +442,25 @@ Must Not Depend On:
 
 `NativeWindow()` is an explicit concrete-adapter escape hatch used only while composing SDL-based adapters. It is not part of GYO's neutral runtime or game-facing render contracts.
 
-### Object_FPS code and content (`this milestone`, opt-in)
+### Object_FPS code and content (`this milestone`, removable conformance consumer)
 
 ```yaml
 Module: apps/object_fps + assets/object_fps
 Owns:
   - FPS campaign, world, player, weapon, enemy, collision, and presentation policy
   - Object_FPS-specific Snapshot, Command, and Event payloads
-  - Object_FPS catalog, CSV definitions, maps, and textures
+  - Object_FPS catalog, CSV definitions, maps, textures, and selected UI font
+  - screen/HUD strings, layout rectangles, colors, alignment, menu selection, hit testing, and resulting game behavior
 Does:
   - implement IRuntimeClient and the typed IRuntimePort specialization
   - map GYO InputActionFrame values into game commands/policy
   - load assets through GYO AssetId/AssetHandle/AssetManager
   - project immutable game snapshots into GYO RenderQueue submissions
+  - build game-owned UI quad/text commands and rasterize whole text runs through GYO::Text
+  - upload neutral TextBitmap values through IRenderDevice and submit them as tinted sprites
   - select concrete adapters at the application composition edge
 Depends On:
-  - GYO public Runtime, Input, Asset, and Render mechanisms
+  - GYO public Runtime, Input, Asset, Text, and Render mechanisms
   - selected optional SDL adapters/backends in its composition root
 Must Not Depend On:
   - KamataEngine
@@ -398,6 +471,10 @@ Must Not Be Depended On By:
 ```
 
 The current three maps are data/content fixtures. Their number, IDs, and order are campaign data, not GYO engine constants.
+
+Object_FPS owns its UI policy; `ObjectFpsUi` materializes the strings, rectangles, colors, alignment, selection hit regions, and screen-specific commands, while Object_FPS game flow retains the consequences of those selections. It is not an engine UI framework. `ObjectFpsPresentation` translates the commands into neutral text raster requests and sprite submissions, caches whole-run textures by `{UTF-8, pointSize}`, and supplies color only as sprite tint. Neither class makes SDL_ttf or SDL_GPU types part of game-facing state.
+
+The `object_fps.menu_smoke` test starts the ordinary Main Menu path, presents its first frame, and requires at least one visible mesh/sprite submission. This protects against regressing to a clear-only startup frame; it is not a pixel-perfect rendering test.
 
 ### Runtime and Sandbox applications (`this milestone`)
 
@@ -437,6 +514,10 @@ GYO::Engine -> nlohmann_json
 GYO::AssetSdlImage (optional)
   -> GYO::Engine + SDL3_image + SDL3
 
+GYO::Text -> GYO::Engine
+GYO::TextBackendSDLTTF (optional)
+  -> GYO::Text + SDL3_ttf + SDL3
+
 GYO::Input
 GYO::InputBackendSDL -> GYO::Input + GYO::PlatformSDL + SDL3
 
@@ -446,16 +527,16 @@ GYO::RenderBackendSDLGPU (optional)
   -> GYO::Render + concrete SDL platform adapter + SDL3
 
 Object_FPS (optional)
-  -> GYO Runtime + Input + Asset + Render public mechanisms
-  -> selected SDL adapters at the composition root
+  -> GYO Runtime + Input + Asset + Text + Render public mechanisms
+  -> selected SDL, SDL_image, SDL_ttf, and SDL_GPU adapters at the composition root
 
 GYO modules -X-> Object_FPS
 GYO modules -X-> Weaver
 ```
 
-The `GYO_BUILD_OBJECT_FPS` option is off by default. Enabling it selects the current SDL_image PNG loader and Windows/MSVC SDL_GPU implementation needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core.
+The `GYO_BUILD_OBJECT_FPS` option controls the conformance game. Enabling it selects the current SDL_image PNG loader, SDL_ttf raster adapter, and Windows/MSVC SDL_GPU implementation needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core.
 
-Third-party source population uses the active build tree. ImGui is selected only for Sandbox; SDL_image is selected only for the image loader/Object_FPS path; doctest is selected only when testing is enabled.
+Third-party source population uses the active build tree. ImGui is selected only for Sandbox; SDL_image is selected only for the image loader/Object_FPS path; SDL_ttf is selected only for the text adapter/Object_FPS path; doctest is selected only when testing is enabled.
 
 ## 8. Platform and graphics backend strategy
 
@@ -502,6 +583,21 @@ Renderer resource creation
 Hashed public IDs use their numeric value as identity. `debugName` is diagnostic metadata only and never changes equality or hashing; invalid IDs/types use value zero. This rule also applies to input action/axis IDs so named mechanisms behave consistently across maps and frame views.
 
 A loader must not create `SDL_Texture`, `SDL_GPUTexture`, `ID3D12Resource`, Vulkan images, or OpenGL textures. Renderer resources have separate lifetime because upload, residency, device loss, and destruction are renderer concerns.
+
+The current text path follows the same boundary:
+
+```text
+catalog font entry
+  -> FontLoader
+  -> FontAsset encoded bytes
+  -> ITextRasterizer
+  -> owning CPU TextBitmap (straight-alpha RGBA8)
+  -> IRenderDevice::CreateTexture(ImageView)
+  -> opaque TextureHandle
+  -> SpriteSubmission
+```
+
+The SDL_ttf adapter ends at `TextBitmap`; it neither creates GPU resources nor submits rendering. Object_FPS currently owns the whole-run texture cache and alignment/color policy in its presentation layer. Its text textures use the neutral linear RGBA upload path, while UI color is applied through `SpriteSubmission::tint` so differently colored instances can reuse the same `{UTF-8, pointSize}` bitmap.
 
 Names describe the actual pipeline. A component that parses runtime stage/map data is a Loader, Parser, or Deserializer, not an Importer. Development import tools remain absent until a real authoring pipeline requires them.
 
@@ -603,7 +699,8 @@ This milestone does not implement Weaver, a Weaver adapter, world model, causal 
 - An `EngineServices` bundle, if ever justified, is only a composition/dependency utility. It is not the Runtime Boundary and must not become a universal service locator.
 - `AudioSystem` is justified only by spatial/listener/source world updates; a wrapper that only calls `AudioManager::Update()` is not a module.
 - Render growth extends neutral submissions/resources and adds backend implementations; it must not expose backend-native commands or handles.
-- Adding Font presentation, Render3D features, Physics3D, Navigation, or an external controller should mostly add code in its own module/backend/adapter.
+- Text growth must extend the neutral raster/pixel boundary or add an optional adapter; it must not make Render or Asset depend on SDL_ttf.
+- Adding Render3D features, Physics3D, Navigation, or an external controller should mostly add code in its own module/backend/adapter.
 - Removing Object_FPS, Physics, Render3D, tools, or an external controller must not break unrelated Engine, Asset, Input, or base Runtime behavior.
 - Public install/export packaging can be added after a real external consumer stabilizes the public surface; no empty packaging facade is required now.
 
@@ -615,7 +712,10 @@ The following are intentionally not created or generalized in this milestone:
 - Generic runtime command scheduler, remote protocol, event subscription bus, or replay journal
 - SceneManager, SceneStack, or a reusable StageRuntime
 - Audio playback or spatial-audio modules
-- Text presentation, general font rendering, animation, navigation, or physics modules
+- Glyph-atlas packing, incremental atlas texture updates, per-glyph batching, SDF text, or a renderer-native text path
+- A GYO-owned general shaping/layout API for wrapping, bidirectional/script/language policy, fallback fonts, caret/selection, or rich text
+- A generic `TextManager`; the current concrete raster request, adapter, and game-owned cache do not justify a global text service locator
+- Animation, navigation, or physics modules
 - General material system, RenderGraph, GPU asset cache shared across devices, or renderer-wide `EverythingManager`
 - Non-Windows SDL_GPU support and dedicated DX12, Vulkan, or OpenGL backends
 - Universal 2D/3D transforms, renderer algorithms, or physics data models
@@ -635,6 +735,6 @@ Before accepting a new runtime module, game integration, or backend, verify:
 3. **External controller:** supported observation and intent use neutral public mechanisms rather than internal/backend access.
 4. **Additive growth:** the feature mainly adds a module, backend, adapter, or game-owned policy/content.
 5. **Removal:** disabling the game or feature does not break unrelated modules.
-6. **Ownership:** Asset, Platform, Input, Render, Runtime, and Game policy retain distinct responsibilities.
+6. **Ownership:** Asset, Platform, Input, Text, Render, Runtime, and Game policy retain distinct responsibilities.
 7. **Dependency direction:** GYO Core has no Game, Weaver, or concrete-backend dependency.
 8. **Honest status:** documentation distinguishes implemented code from on-demand architecture and reports build/test results separately from design intent.

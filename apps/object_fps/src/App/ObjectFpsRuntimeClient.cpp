@@ -1,5 +1,7 @@
 #include "RetroFPS/App/ObjectFpsRuntimeClient.hpp"
 
+#include "RetroFPS/App/ObjectFpsUi.hpp"
+
 #include "engine/asset/AssetManager.hpp"
 #include "engine/input/InputActionMap.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
@@ -73,28 +75,53 @@ struct ObjectFpsRuntimeClient::Impl final {
     int exitCode{};
     bool initialized{};
     bool previousFocused{};
+    float previousPointerX{};
+    float previousPointerY{};
+    bool hasPreviousAbsolutePointer{};
 
     [[nodiscard]] GameFrameInput TranslateInput(
         const Engine::Input::InputActionFrame& actions,
-        const Engine::Input::PhysicalInputFrame& physical) const noexcept {
+        const Engine::Input::PhysicalInputFrame& physical) noexcept {
         const Engine::Input::InputActionState fire = actions.Action(bindings.fire);
-        return {
-            actions.Axis(bindings.moveForward),
-            actions.Axis(bindings.moveRight),
-            actions.Axis(bindings.lookX),
-            actions.Axis(bindings.lookY),
-            physical.pointer.relativeMode && physical.windowFocused,
-            fire.held,
-            fire.pressed,
-            actions.Action(bindings.reload).pressed,
-            actions.Action(bindings.menuPrevious).pressed,
-            actions.Action(bindings.menuNext).pressed,
-            actions.Action(bindings.confirm).pressed,
-            actions.Action(bindings.back).pressed,
-            fire.pressed,
-            std::nullopt,
-            previousFocused && !physical.windowFocused,
-        };
+        const bool pointerPrimaryPressed =
+            physical.Get(Engine::Input::MouseButton::Left).pressed;
+        std::optional<std::size_t> hoveredMenuItem;
+        if (!physical.pointer.relativeMode && physical.windowFocused) {
+            const bool pointerMoved = !hasPreviousAbsolutePointer ||
+                physical.pointer.x != previousPointerX ||
+                physical.pointer.y != previousPointerY;
+            if (pointerMoved || pointerPrimaryPressed) {
+                hoveredMenuItem = ObjectFpsUi::HitTest(
+                    session.Snapshot().screen,
+                    physical.pointer.x,
+                    physical.pointer.y,
+                    {0.0F, 0.0F, config.viewportWidth, config.viewportHeight});
+            }
+            previousPointerX = physical.pointer.x;
+            previousPointerY = physical.pointer.y;
+            hasPreviousAbsolutePointer = true;
+        } else {
+            hasPreviousAbsolutePointer = false;
+        }
+        GameFrameInput translated;
+        translated.moveForward = actions.Axis(bindings.moveForward);
+        translated.moveRight = actions.Axis(bindings.moveRight);
+        translated.lookDeltaX = actions.Axis(bindings.lookX);
+        translated.lookDeltaY = actions.Axis(bindings.lookY);
+        translated.lookEnabled =
+            physical.pointer.relativeMode && physical.windowFocused;
+        translated.fireHeld = fire.held;
+        translated.firePressed = fire.pressed;
+        translated.reloadPressed = actions.Action(bindings.reload).pressed;
+        translated.menuPreviousPressed =
+            actions.Action(bindings.menuPrevious).pressed;
+        translated.menuNextPressed = actions.Action(bindings.menuNext).pressed;
+        translated.confirmPressed = actions.Action(bindings.confirm).pressed;
+        translated.backPressed = actions.Action(bindings.back).pressed;
+        translated.pointerPrimaryPressed = pointerPrimaryPressed;
+        translated.hoveredMenuItem = hoveredMenuItem;
+        translated.focusLost = previousFocused && !physical.windowFocused;
+        return translated;
     }
 };
 
@@ -198,6 +225,15 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Render(
         return Engine::Runtime::RuntimeControl::Stop;
     }
     static_cast<void>(frame);
+    if (impl_->config.stopAfterFirstMenuFrame &&
+        impl_->session.Snapshot().screen == GameScreen::MainMenu) {
+        if (impl_->presentation->LastVisibleSubmissionCount() == 0) {
+            impl_->lastError =
+                "ordinary Object_FPS startup produced no visible MainMenu submission";
+            impl_->exitCode = 1;
+        }
+        return Engine::Runtime::RuntimeControl::Stop;
+    }
     return impl_->config.stopAfterFirstPlayingFrame &&
             impl_->session.Snapshot().screen == GameScreen::Playing
         ? Engine::Runtime::RuntimeControl::Stop

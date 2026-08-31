@@ -1,24 +1,15 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <vector>
-
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/core/AnyAsset.hpp"
-#include "engine/base/Result.hpp"
-#include "engine/base/Span.hpp"
+#include "engine/asset/loaders/FontAsset.hpp"
 #include "engine/asset/loading/IAssetLoader.hpp"
 #include "engine/asset/loading/LoadContext.hpp"
+#include "engine/base/Result.hpp"
+#include "engine/base/Span.hpp"
 
 namespace Engine::Asset::Loaders {
     using AssetError = Base::Error<AssetErrorCode>;
-
-
-    // フォントは decode せず “Blob” として保持（後段の font rasterizer が使う）
-    struct FontAsset final {
-        std::vector<std::byte> bytes; // TTF/OTF
-    };
 
     class FontLoader final : public Loading::IAssetLoader {
     public:

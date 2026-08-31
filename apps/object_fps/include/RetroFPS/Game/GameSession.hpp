@@ -74,6 +74,8 @@ struct ScreenChangedEvent final {
 
 struct StageEnteredEvent final {
     LevelDefinitionId levelId;
+    // Zero-based campaign content index. Presentation may convert it to a
+    // one-based player-facing stage number.
     std::size_t ordinal{};
     std::size_t stageCount{};
 };
@@ -133,6 +135,8 @@ enum class StageTransitionPhase {
 struct ActiveStageSnapshot final {
     LevelDefinitionId levelId;
     std::string levelName;
+    // Zero-based because presentation also uses this value to index the
+    // campaign's immutable stage resources.
     std::size_t ordinal{};
     std::size_t stageCount{};
     bool doorVisible{};

@@ -502,6 +502,11 @@ struct GameSession::Impl final {
                 input.pointerPrimaryPressed,
                 input.hoveredMenuItem,
             });
+            if (previousScreen == GameScreen::Paused &&
+                flow.GetScreen() == GameScreen::Playing) {
+                movementReleaseRequired = true;
+                fireReleaseRequired = true;
+            }
             EmitScreenChange(previousScreen);
 
             switch (flowResult.action) {

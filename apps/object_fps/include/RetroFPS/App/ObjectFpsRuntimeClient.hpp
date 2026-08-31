@@ -27,6 +27,9 @@ namespace fps {
 struct ObjectFpsRuntimeClientConfig final {
     bool startCampaignImmediately{};
     bool stopAfterFirstPlayingFrame{};
+    bool stopAfterFirstMenuFrame{};
+    float viewportWidth{1280.0F};
+    float viewportHeight{720.0F};
 };
 
 // The executable's GYO client and caller-neutral typed runtime port. It maps

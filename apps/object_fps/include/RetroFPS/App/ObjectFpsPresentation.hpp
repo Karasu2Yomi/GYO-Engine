@@ -6,6 +6,7 @@
 
 #include "engine/asset/AssetId.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -17,6 +18,10 @@ namespace Engine::Render {
 class IRenderDevice;
 }
 
+namespace Engine::Text {
+class ITextRasterizer;
+}
+
 namespace fps {
 
 struct ObjectFpsPresentationConfig final {
@@ -26,6 +31,8 @@ struct ObjectFpsPresentationConfig final {
         Engine::Asset::AssetId::FromString("object_fps.texture.world.wall")};
     Engine::Asset::AssetId skyTexture{
         Engine::Asset::AssetId::FromString("object_fps.texture.sky.default")};
+    Engine::Asset::AssetId uiFont{
+        Engine::Asset::AssetId::FromString("object_fps.font.ui")};
     WorldSettings world{};
     float viewportWidth{1280.0F};
     float viewportHeight{720.0F};
@@ -46,6 +53,7 @@ public:
 
     [[nodiscard]] bool Initialize(
         Engine::Render::IRenderDevice& renderDevice,
+        Engine::Text::ITextRasterizer& textRasterizer,
         Engine::Asset::AssetManager& assets,
         std::shared_ptr<const CampaignContent> content,
         const ObjectFpsPresentationConfig& config,
@@ -56,6 +64,7 @@ public:
         std::string& error);
 
     [[nodiscard]] bool IsInitialized() const noexcept;
+    [[nodiscard]] std::size_t LastVisibleSubmissionCount() const noexcept;
 
 private:
     struct Impl;
