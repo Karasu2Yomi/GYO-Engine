@@ -1,14 +1,5 @@
 include(FetchContent)
 
-# 依存物の置き場所（build/_deps 配下などに揃う）
-set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/../third_party/imgui" CACHE PATH "" FORCE)
-
-# 再現性重視：勝手に更新しない（初回DLは必要）
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
-
-# ----------------------------
-# Dear ImGui
-# ----------------------------
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -17,24 +8,40 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(imgui)
 
-add_library(imgui_lib STATIC
+add_library(imgui_core STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+)
 
-    # SDL3 platform backend
+target_include_directories(imgui_core PUBLIC
+    ${imgui_SOURCE_DIR}
+)
+
+add_library(imgui::core ALIAS imgui_core)
+
+add_library(imgui_sdl3_sdlrenderer3 STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    # SDL_Renderer (SDL3) renderer backend
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
 )
 
-target_include_directories(imgui_lib PUBLIC
+target_include_directories(imgui_sdl3_sdlrenderer3 PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
 )
 
-target_link_libraries(imgui_lib PUBLIC SDL3::SDL3)
+target_link_libraries(imgui_sdl3_sdlrenderer3 PUBLIC
+    imgui::core
+    SDL3::SDL3
+)
 
-add_library(imgui::imgui ALIAS imgui_lib)
+add_library(imgui::sdl3_sdlrenderer3 ALIAS imgui_sdl3_sdlrenderer3)
+
+add_library(imgui_demo STATIC
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+)
+
+target_link_libraries(imgui_demo PUBLIC imgui::core)
+
+add_library(imgui::demo ALIAS imgui_demo)

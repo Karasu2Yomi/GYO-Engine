@@ -64,27 +64,13 @@
 *.gcno
 coverage/
 
-# FetchContent caches created beside dependency wrappers
-/third_party/doctest/doctest-build/
-/third_party/doctest/doctest-src/
-/third_party/doctest/doctest-subbuild/
-/third_party/doctest/doctest-tmp/
-/third_party/imgui/imgui-build/
-/third_party/imgui/imgui-src/
-/third_party/imgui/imgui-subbuild/
-/third_party/imgui/imgui-tmp/
-/third_party/nlohmann_json/nlohmann_json-build/
-/third_party/nlohmann_json/nlohmann_json-src/
-/third_party/nlohmann_json/nlohmann_json-subbuild/
-/third_party/nlohmann_json/nlohmann_json-tmp/
-/third_party/sdl3/sdl3-build/
-/third_party/sdl3/sdl3-src/
-/third_party/sdl3/sdl3-subbuild/
-/third_party/sdl3/sdl3-tmp/
-/third_party/sdl3_image/sdl3_image-build/
-/third_party/sdl3_image/sdl3_image-src/
-/third_party/sdl3_image/sdl3_image-subbuild/
-/third_party/sdl3_image/sdl3_image-tmp/
+# FetchContent caches. Match them at any depth because a CMake profile with a
+# mis-scoped FETCHCONTENT_BASE_DIR can otherwise place one dependency's build
+# tree below another dependency wrapper.
+/third_party/**/*-build/
+/third_party/**/*-src/
+/third_party/**/*-subbuild/
+/third_party/**/*-tmp/
 
 # Operating-system metadata
 .DS_Store

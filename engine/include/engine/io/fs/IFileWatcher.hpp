@@ -9,7 +9,7 @@
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/io/IoError.hpp"
-#include "engine/io/IoFwd.hpp" // Path::Uri forward
+#include "engine/io/path/Uri.hpp"
 
 namespace Engine::IO::FS {
 

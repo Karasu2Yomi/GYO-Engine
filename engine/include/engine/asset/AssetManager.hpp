@@ -45,7 +45,7 @@ namespace Engine::Asset {
             bool reloadKeepOldIfAny = true;
         };
 
-        // 依存は参照で注入：Engine内の “組み立て” は EngineCore/Services の責務
+        // Dependencies are injected by the application composition root.
         AssetManager(AssetCatalog& catalog,
                      Loading::AssetPipeline& pipeline,
                      Core::AssetStorage& storage,
@@ -72,6 +72,8 @@ namespace Engine::Asset {
 
         // 参照カウント（AssetStorage.refCount）操作
         // - Load() は内部で Acquire 相当（refCount++）する設計
+        // - Release() accepts stale generations only to balance their original
+        //   reference; read/query APIs continue to reject stale handles.
         bool Acquire(const AssetHandle& h);
         void Release(const AssetHandle& h);
 
@@ -113,6 +115,7 @@ namespace Engine::Asset {
         struct PendingLoad final {
             AssetId id;
             AssetRequest req;
+            bool hadReadyAsset = false;
         };
 
     private:
@@ -129,7 +132,10 @@ namespace Engine::Asset {
         Core::AssetRecord& GetOrCreateRecord_(const AssetId& id, const ResolvedEntry& e);
 
         // 実ロード（Sync）
-        Base::Result<void, AssetError> DoLoadSync_(Core::AssetRecord& rec, const ResolvedEntry& e, const AssetRequest& req);
+        Base::Result<void, AssetError> DoLoadSync_(Core::AssetRecord& rec,
+                                                   const ResolvedEntry& e,
+                                                   const AssetRequest& req,
+                                                   bool hadReadyAsset);
 
         // Async キュー操作
         void EnqueueLoad_(const AssetId& id, const AssetRequest& req);

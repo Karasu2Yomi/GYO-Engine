@@ -1,11 +1,8 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <vector>
-
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/core/AnyAsset.hpp"
+#include "engine/asset/loaders/TextureAsset.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 #include "engine/asset/loading/IAssetLoader.hpp"
@@ -13,13 +10,6 @@
 
 namespace Engine::Asset::Loaders {
     using AssetError = Base::Error<AssetErrorCode>;
-
-    // 最小のテクスチャ表現（RGBA8）
-    struct TextureAsset final {
-        std::uint32_t width  = 0;
-        std::uint32_t height = 0;
-        std::vector<std::uint8_t> rgba; // size = width*height*4
-    };
 
     class TextureLoader final : public Loading::IAssetLoader {
     public:

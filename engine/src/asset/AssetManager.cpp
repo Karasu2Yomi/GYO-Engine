@@ -54,7 +54,7 @@ namespace Engine::Asset {
             lifetime_.Touch(id, frame_);
 
             // Acquire 相当
-            ++rec.refCount;
+            rec.AddReference(rec.generation);
 
             // typed handle を使いたい場合は、Load<T>() を別途用意して MakeTyped<T>() を返すのが自然
             return Base::Result<AssetHandle, AssetError>::Ok(
@@ -80,13 +80,13 @@ namespace Engine::Asset {
         if (request.IsAsync()) {
             // すでに Loading 中なら二重投入しない
             if (!rec.IsLoading()) {
-                rec.MarkLoading();
                 EnqueueLoad_(id, request);
+                rec.MarkLoading();
                 if (stats_) stats_->OnLoadStart();
             }
 
             // Acquire 相当：呼んだ側はこのhandleを保持する前提
-            ++rec.refCount;
+            rec.AddReference(rec.generation);
 
             return Base::Result<AssetHandle, AssetError>::Ok(
                 AssetHandle::Make(id, rec.generation)
@@ -94,7 +94,7 @@ namespace Engine::Asset {
         }
 
         // 6) Sync：その場でロード
-        auto loadR = DoLoadSync_(rec, e, request);
+        auto loadR = DoLoadSync_(rec, e, request, rec.IsReady());
         if (!loadR) {
             // reload fallback が KeepOldIfAny で、旧データがある場合は rec が Ready のまま
             // その場合は “成功としてhandleを返す” のが開発UX的に強い
@@ -111,7 +111,7 @@ namespace Engine::Asset {
         lifetime_.OnLoaded(id, frame_);
 
         // Acquire 相当
-        ++rec.refCount;
+        rec.AddReference(rec.generation);
 
         return Base::Result<AssetHandle, AssetError>::Ok(
             AssetHandle::Make(id, rec.generation)
@@ -122,7 +122,7 @@ namespace Engine::Asset {
         Core::AssetRecord* rec = FindRecord_(h);
         if (!rec) return false;
         if (rec->generation != h.generation()) return false;
-        ++rec->refCount;
+        rec->AddReference(rec->generation);
         lifetime_.Touch(h.id(), frame_);
         return true;
     }
@@ -130,9 +130,12 @@ namespace Engine::Asset {
     void AssetManager::Release(const AssetHandle& h) {
         Core::AssetRecord* rec = FindRecord_(h);
         if (!rec) return;
-        if (rec->generation != h.generation()) return;
 
-        if (rec->refCount > 0) --rec->refCount;
+        // A successful reload deliberately makes old handles stale for reads.
+        // Their Load/Acquire references still have to be released, however.
+        // AssetRecord keeps generation-scoped counts so a stale or repeated
+        // release cannot consume a reference owned by the current generation.
+        (void)rec->ReleaseReference(h.generation());
         // 解放後の eviction は「上位が EvictIfPossible を呼ぶ」運用にしておく（自動evictは後で）
     }
 
@@ -222,9 +225,10 @@ namespace Engine::Asset {
     }
 
     Base::Result<void, AssetError>
-    AssetManager::DoLoadSync_(Core::AssetRecord& rec, const ResolvedEntry& e, const AssetRequest& req) {
-        const bool wasReady = rec.IsReady();
-
+    AssetManager::DoLoadSync_(Core::AssetRecord& rec,
+                              const ResolvedEntry& e,
+                              const AssetRequest& req,
+                              bool hadReadyAsset) {
         // ForceReload のときは “読み込み前に Loading へ”
         rec.MarkLoading();
 
@@ -239,7 +243,7 @@ namespace Engine::Asset {
         auto r = pipeline_.Load(ctx);
         if (!r) {
             // Reload + KeepOldIfAny + 旧データあり => 旧キャッシュ維持
-            if (req.fallback == AssetRequest::Fallback::KeepOldIfAny && wasReady) {
+            if (req.fallback == AssetRequest::Fallback::KeepOldIfAny && hadReadyAsset) {
                 // 旧 asset は rec.asset に残っているので state を Ready に戻す
                 // ただしエラー情報は “最後のreload失敗” として残しておく（デバッグ優先）
                 rec.state = AssetState::Ready;
@@ -248,14 +252,21 @@ namespace Engine::Asset {
                 return Base::Result<void, AssetError>::Ok();
             }
 
+            // A destructive reload invalidated a previously readable payload.
+            // Retire that generation even though no replacement was produced;
+            // otherwise a later recovery load could resurrect old handles.
+            if (req.IsReload() && hadReadyAsset) {
+                rec.AdvanceGeneration();
+            }
+
             rec.SetFailed(std::move(r.error()));
             return Base::Result<void, AssetError>::Err(rec.error);
         }
 
         // 成功：AnyAsset を格納
         // Reload で既に Ready だった場合のみ generation を進める（stale handle を弾く）
-        if (req.IsReload() && wasReady) {
-            ++rec.generation;
+        if (req.IsReload() && hadReadyAsset) {
+            rec.AdvanceGeneration();
             if (stats_) stats_->OnReload(rec.id);
         }
 
@@ -270,7 +281,8 @@ namespace Engine::Asset {
         // 重複投入を防ぐ（同じIDがキューにいるならスキップ）
         if (queued_.find(id) != queued_.end()) return;
 
-        queue_.push_back(PendingLoad{ id, req });
+        const Core::AssetRecord* record = storage_.Find(id);
+        queue_.push_back(PendingLoad{ id, req, record != nullptr && record->IsReady() });
         queued_.insert(id);
     }
 
@@ -298,7 +310,7 @@ namespace Engine::Asset {
             Core::AssetRecord& rec = GetOrCreateRecord_(job.id, e);
 
             // 実ロード（sync実行）
-            (void)DoLoadSync_(rec, e, job.req);
+            (void)DoLoadSync_(rec, e, job.req, job.hadReadyAsset);
 
             // 成功なら寿命更新
             if (rec.IsReady()) lifetime_.OnLoaded(rec.id, frame_);

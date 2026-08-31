@@ -5,45 +5,36 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# (Optional) CLion向け: compile_commands.json を出す
-# set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+option(GYO_BUILD_RUNTIME "Build the minimal standalone runtime application" OFF)
+option(GYO_BUILD_SANDBOX "Build the optional ImGui/JSON sandbox application" OFF)
+option(GYO_BUILD_OBJECT_FPS "Build the Object_FPS GYO conformance game" ON)
+option(
+    GYO_BUILD_SDL_GPU_BACKEND
+    "Build the optional Windows/MSVC SDL_GPU render backend"
+    OFF
+)
 
-option(BUILD_TOOLS "Build tools (editor, etc.)" ON)
-option(BUILD_GAME  "Build game executable" ON)
-option(RUN_TEST_CASE  "Test case executable" ON)
+include(CTest)
 
+# Keep dependency sources private to each build tree. Disconnected updates still
+# allow the first population, but do not mutate an already populated dependency.
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL
+    "Do not update already-populated FetchContent dependencies")
 
-# =========================
-# [third_party 導入位置] ここで third_party を読み込む（依存は third_party 側で完結）
-# =========================
 add_subdirectory(third_party)
-
-# =========================
-# ここから自作サブプロジェクト（internal）
-# =========================
-
 add_subdirectory(engine)
-#add_subdirectory(systems)
-#add_subdirectory(game)
-#add_subdirectory(game)
 
-
-
-# ----------------------------
-# App
-# ----------------------------
-# App 実装（main なし）
-if(BUILD_GAME)
-    add_subdirectory(game)
+if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS OR
+   GYO_BUILD_SDL_GPU_BACKEND)
+    add_subdirectory(platform)
+    add_subdirectory(render)
 endif()
 
-if(BUILD_TOOLS)
-    add_subdirectory(tools)
+if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS)
+    add_subdirectory(input)
+    add_subdirectory(apps)
 endif()
 
-if(RUN_TEST_CASE)
+if(BUILD_TESTING)
     add_subdirectory(tests)
-endif ()
-
-# 実行入口（main あり）
-add_subdirectory(apps)
+endif()

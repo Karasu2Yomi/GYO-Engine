@@ -25,9 +25,6 @@ namespace Engine::Asset::Loading {
 
         virtual Base::Result<ByteBuffer, AssetError>
         ReadAll(std::string_view resolvedPath) = 0;
-
-        // 任意：将来使うなら
-        virtual bool Exists(std::string_view /*resolvedPath*/) { return true; }
     };
 
 } // namespace Engine::Asset::Loading

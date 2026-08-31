@@ -1,4 +1,5 @@
 add_library(engine STATIC)
+add_library(GYO::Engine ALIAS engine)
 
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -6,6 +7,9 @@ target_include_directories(engine PUBLIC
 
 target_sources(engine
     PRIVATE
+    # runtime
+    src/runtime/RuntimeLoop.cpp
+
     # base
     # io/fs
     src/io/fs/DirectoryIterator.cpp
@@ -41,7 +45,22 @@ target_sources(engine
     src/asset/AssetPipeline.cpp
     src/asset/AssetWatcher.cpp
     src/asset/LoaderRegistry.cpp
+    src/asset/NativeFileAssetSource.cpp
 )
 target_link_libraries(engine PRIVATE
     nlohmann_json::nlohmann_json
 )
+
+# SDL_image is an optional decoder implementation. GYO::Engine remains
+# backend-neutral and continues to configure without SDL or SDL_image.
+if(TARGET SDL3_image::SDL3_image)
+    add_library(gyo_asset_sdl_image STATIC
+        src/asset/loaders/sdl_image/SdlImageTextureLoader.cpp
+    )
+    add_library(GYO::AssetSdlImage ALIAS gyo_asset_sdl_image)
+
+    target_link_libraries(gyo_asset_sdl_image
+        PUBLIC GYO::Engine
+        PRIVATE SDL3_image::SDL3_image SDL3::SDL3
+    )
+endif()

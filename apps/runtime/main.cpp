@@ -1,164 +1,110 @@
-#define WIN32_LEAN_AND_MEAN
+#include <string_view>
+#include <utility>
 
-// windows
-#include <windows.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-// imgui
-#include "imgui.h"
-#include "backends/imgui_impl_sdl3.h"
-#include "backends/imgui_impl_sdlrenderer3.h"
-// json
-#include <nlohmann/json.hpp>
-// lib
-#include <string>
 
+#include "engine/runtime/RuntimeLoop.hpp"
+#include "platform/sdl/SdlPlatform.hpp"
+#include "render/backend/sdl/SdlRenderer.hpp"
 
+namespace {
 
-int GameMain(int, char**)
-{
-    // --- SDL init ---
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_Log("SDL_Init failed: %s", SDL_GetError());
-        return 1;
-    }
+using Engine::Platform::Sdl::SdlPlatform;
+using Engine::Render::Backend::Sdl::Color;
+using Engine::Render::Backend::Sdl::SdlRenderer;
+using Engine::Runtime::FrameContext;
+using Engine::Runtime::IRuntimeClient;
+using Engine::Runtime::RuntimeControl;
 
-    SDL_Window* window = SDL_CreateWindow(
-        "SDL3 + ImGui Demo",
-        1280,
-        720,
-        SDL_WINDOW_RESIZABLE
-    );
-    if (!window)
-    {
-        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
-    if (!renderer)
-    {
-        SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    // VSYNC（無ければ無視される実装もある）
-    SDL_SetRenderVSync(renderer, 1);
-
-    // --- ImGui init ---
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    (void)io;
-
-    ImGui::StyleColorsDark();
-
-    // Platform / Renderer backends
-    // ※ ここが SDL3 連動の肝
-    if (!ImGui_ImplSDL3_InitForSDLRenderer(window, renderer))
-    {
-        SDL_Log("ImGui_ImplSDL3_InitForSDLRenderer failed");
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    if (!ImGui_ImplSDLRenderer3_Init(renderer))
-    {
-        SDL_Log("ImGui_ImplSDLRenderer3_Init failed");
-        ImGui_ImplSDL3_Shutdown();
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    // --- Demo state ---
-    bool running = true;
-    bool show_demo_window = true;
-    float value = 0.5f;
-
-    // nlohmann/json demo data
-    nlohmann::json j;
-    j["app"] = "sdl3_imgui_demo";
-    j["window"] = {{"w", 1280}, {"h", 720}};
-    j["value"] = value;
-
-    while (running)
-    {
-        // --- Events ---
-        SDL_Event e;
-        while (SDL_PollEvent(&e))
-        {
-            ImGui_ImplSDL3_ProcessEvent(&e);
-
-            if (e.type == SDL_EVENT_QUIT)
-                running = false;
-
-            // ウィンドウ閉じる
-            if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
-                running = false;
+bool HasSmokeTestArgument(int argc, char* argv[]) {
+    for (int index = 1; index < argc; ++index) {
+        if (std::string_view(argv[index]) == "--smoke-test") {
+            return true;
         }
-
-        // --- ImGui new frame ---
-        ImGui_ImplSDLRenderer3_NewFrame();
-        ImGui_ImplSDL3_NewFrame();
-        ImGui::NewFrame();
-
-        // --- UI ---
-        {
-            ImGui::Begin("Control");
-
-            ImGui::Checkbox("Show ImGui Demo Window", &show_demo_window);
-            ImGui::SliderFloat("value", &value, 0.0f, 1.0f);
-
-            // JSONを更新して表示
-            j["value"] = value;
-            std::string jsonText = j.dump(2);
-
-            ImGui::Separator();
-            ImGui::TextUnformatted("nlohmann/json dump:");
-            ImGui::BeginChild("json", ImVec2(0, 200), true);
-            ImGui::TextUnformatted(jsonText.c_str());
-            ImGui::EndChild();
-
-            ImGui::End();
-        }
-
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        // --- Render ---
-        ImGui::Render();
-
-        SDL_SetRenderDrawColor(renderer, 20, 20, 22, 255);
-        SDL_RenderClear(renderer);
-
-        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-
-        SDL_RenderPresent(renderer);
     }
-
-    // --- Shutdown ---
-    ImGui_ImplSDLRenderer3_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
-
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-
-    return 0;
+    return false;
 }
 
+template <typename Error>
+void LogError(const Error& error) {
+    SDL_LogError(
+        SDL_LOG_CATEGORY_APPLICATION,
+        "%s%s%s",
+        error.message.c_str(),
+        error.detail.empty() ? "" : ": ",
+        error.detail.c_str());
+}
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    // SDLのmainラッパを使わない場合に推奨
-    SDL_SetMainReady();
+class RuntimeClient final : public IRuntimeClient {
+public:
+    RuntimeClient(
+        SdlPlatform& platform,
+        SdlRenderer& renderer,
+        bool smokeTest) noexcept
+        : platform_(platform), renderer_(renderer), smokeTest_(smokeTest) {}
 
-    return GameMain(0, nullptr);
+    RuntimeControl ProcessEvents(const FrameContext&) override {
+        return platform_.PumpEvents();
+    }
+
+    RuntimeControl Update(const FrameContext&) override {
+        return RuntimeControl::Continue;
+    }
+
+    RuntimeControl Render(const FrameContext& frame) override {
+        auto clearResult = renderer_.Clear(Color{20, 20, 22, 255});
+        if (!clearResult) {
+            LogError(clearResult.error());
+            exitCode_ = 1;
+            return RuntimeControl::Stop;
+        }
+
+        auto presentResult = renderer_.Present();
+        if (!presentResult) {
+            LogError(presentResult.error());
+            exitCode_ = 1;
+            return RuntimeControl::Stop;
+        }
+
+        if (smokeTest_ && frame.frameIndex == 0) {
+            return RuntimeControl::Stop;
+        }
+
+        return RuntimeControl::Continue;
+    }
+
+    [[nodiscard]] int ExitCode() const noexcept {
+        return exitCode_;
+    }
+
+private:
+    SdlPlatform& platform_;
+    SdlRenderer& renderer_;
+    bool smokeTest_{};
+    int exitCode_{};
+};
+
+} // namespace
+
+int main(int argc, char* argv[]) {
+    auto platformResult = SdlPlatform::Create();
+    if (!platformResult) {
+        LogError(platformResult.error());
+        return 1;
+    }
+    auto platform = std::move(platformResult).value();
+
+    auto rendererResult = SdlRenderer::Create(*platform);
+    if (!rendererResult) {
+        LogError(rendererResult.error());
+        return 1;
+    }
+    auto renderer = std::move(rendererResult).value();
+
+    RuntimeClient client(*platform, *renderer, HasSmokeTestArgument(argc, argv));
+    Engine::Runtime::RuntimeLoop loop(client);
+    loop.Run();
+
+    return client.ExitCode();
 }

@@ -1,0 +1,124 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <span>
+
+#include "render/RenderHandle.hpp"
+
+namespace Engine::Render {
+
+struct Float2 final {
+    float x{};
+    float y{};
+};
+
+struct Float3 final {
+    float x{};
+    float y{};
+    float z{};
+};
+
+struct Color final {
+    float red{1.0F};
+    float green{1.0F};
+    float blue{1.0F};
+    float alpha{1.0F};
+};
+
+struct Rect final {
+    float x{};
+    float y{};
+    float width{};
+    float height{};
+};
+
+// GYO 3D presentation uses a left-handed coordinate system: +Y is up, +Z is
+// forward, and rotations are expressed in radians. Scale, X/Y/Z rotation, and
+// translation are applied in that order.
+struct Transform3D final {
+    Float3 translation{};
+    Float3 rotationRadians{};
+    Float3 scale{1.0F, 1.0F, 1.0F};
+};
+
+struct PerspectiveCamera3D final {
+    Float3 position{};
+    Float3 rotationRadians{};
+    float verticalFieldOfViewRadians{1.0471975512F};
+    float nearClip{0.05F};
+    float farClip{100.0F};
+};
+
+struct Vertex3D final {
+    Float3 position{};
+    Float2 uv{};
+};
+
+struct MeshView final {
+    std::span<const Vertex3D> vertices{};
+    std::span<const std::uint32_t> indices{};
+};
+
+enum class TextureColorSpace {
+    Linear,
+    SRgb,
+};
+
+// ImageView contains decoded pixels only. File IO and image decoding belong
+// to asset loaders, not to a render backend.
+struct ImageView final {
+    std::uint32_t width{};
+    std::uint32_t height{};
+    std::uint32_t rowPitch{}; // zero means tightly packed width * 4
+    std::span<const std::byte> rgba8{};
+    TextureColorSpace colorSpace{TextureColorSpace::SRgb};
+};
+
+enum class SurfaceMode {
+    Opaque,
+    AlphaMasked,
+    Sky,
+};
+
+enum class SamplerMode {
+    LinearClamp,
+    LinearWrap,
+};
+
+struct UvTransform final {
+    Float2 scale{1.0F, 1.0F};
+    Float2 offset{};
+};
+
+struct MeshSubmission final {
+    MeshHandle mesh{};
+    TextureHandle texture{}; // invalid selects the backend's white texture
+    Transform3D transform{};
+    Color tint{};
+    UvTransform uv{};
+    SurfaceMode surface{SurfaceMode::Opaque};
+    SamplerMode sampler{SamplerMode::LinearClamp};
+    bool doubleSided{};
+};
+
+struct SpriteSubmission final {
+    TextureHandle texture{}; // invalid selects the backend's white texture
+    Rect destinationPixels{};
+    Rect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
+    Float2 pivotNormalized{};
+    float rotationRadians{};
+    Color tint{};
+    SamplerMode sampler{SamplerMode::LinearClamp};
+};
+
+struct FrameDescription final {
+    Color clearColor{0.0F, 0.0F, 0.0F, 1.0F};
+};
+
+enum class PresentStatus {
+    Presented,
+    Skipped,
+};
+
+} // namespace Engine::Render

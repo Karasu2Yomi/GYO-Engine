@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "engine/asset/AssetId.hpp"
@@ -37,13 +38,48 @@ namespace Engine::Asset::Core {
         // 失敗時の情報（成功時は空にしておく）
         AssetError error{};
 
-        // “参照数”をここで持つかは好みだが、Storageに置くとデバッグに強い
+        // Total number of references across every still-live handle generation.
+        // A reload makes old handles stale for reads, but it does not revoke the
+        // references acquired by the Load calls which returned those handles.
         std::uint32_t refCount = 0;
+
+        // Reference accounting is generation-aware so releasing an old handle
+        // cannot consume a reference acquired by the current generation.
+        std::unordered_map<std::uint32_t, std::uint32_t> refCountsByGeneration;
 
         // ---- helpers ----
         bool IsReady() const noexcept { return state == AssetState::Ready; }
         bool IsFailed() const noexcept { return state == AssetState::Failed; }
         bool IsLoading() const noexcept { return state == AssetState::Loading; }
+
+        void AddReference(std::uint32_t handleGeneration) {
+            ++refCount;
+            ++refCountsByGeneration[handleGeneration];
+        }
+
+        bool ReleaseReference(std::uint32_t handleGeneration) {
+            const auto it = refCountsByGeneration.find(handleGeneration);
+            if (it == refCountsByGeneration.end() || it->second == 0) {
+                return false;
+            }
+
+            --it->second;
+            if (refCount > 0) {
+                --refCount;
+            }
+            if (it->second == 0) {
+                refCountsByGeneration.erase(it);
+            }
+            return true;
+        }
+
+        void AdvanceGeneration() noexcept {
+            ++generation;
+            // AssetHandle reserves zero for Invalid().
+            if (generation == 0) {
+                generation = 1;
+            }
+        }
 
         void MarkLoading() noexcept { state = AssetState::Loading; }
 

@@ -9,9 +9,10 @@
 #include "engine/base/Result.hpp"
 
 #include "engine/io/IoError.hpp"
-#include "engine/io/IoFwd.hpp"                 // Path::Uri, Stream::IStream の forward
+#include "engine/io/path/Uri.hpp"
 #include "engine/io/fs/FileInfo.hpp"
-#include "engine/io/stream/FileOpenMode.hpp"   // FileOpenMode
+#include "engine/io/stream/FileOpenMode.hpp"
+#include "engine/io/stream/IStream.hpp"
 
 #include "engine/io/fs/FileSystemCapabilities.hpp"
 #include "engine/io/fs/DirectoryIterator.hpp"

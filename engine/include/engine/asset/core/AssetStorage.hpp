@@ -21,6 +21,9 @@ public:
     AssetStorage() = default;
 
     void Clear() {
+        for (const auto& [id, record] : records_) {
+            RetireGeneration_(id, record->generation);
+        }
         records_.clear();
     }
 
@@ -52,6 +55,10 @@ public:
         rec->type = type;
         rec->resolvedPath = std::move(resolvedPath);
         rec->state = AssetState::Unloaded;
+        if (const auto retired = retiredGenerations_.find(id);
+            retired != retiredGenerations_.end()) {
+            rec->generation = NextGeneration_(retired->second);
+        }
 
         auto* ptr = rec.get();
         records_.emplace(id, std::move(rec));
@@ -62,17 +69,6 @@ public:
     void SetResolvedPathIfEmpty(const AssetId& id, std::string resolvedPath) {
         if (auto* r = Find(id)) {
             if (r->resolvedPath.empty()) r->resolvedPath = std::move(resolvedPath);
-        }
-    }
-
-    // 参照カウント（AssetHandle運用の補助）
-    void AddRef(const AssetId& id) {
-        if (auto* r = Find(id)) ++r->refCount;
-    }
-
-    void ReleaseRef(const AssetId& id) {
-        if (auto* r = Find(id)) {
-            if (r->refCount > 0) --r->refCount;
         }
     }
 
@@ -88,12 +84,27 @@ public:
         if (it == records_.end()) return;
 
         if (force || it->second->refCount == 0) {
+            RetireGeneration_(id, it->second->generation);
             records_.erase(it);
         }
     }
 
 private:
+    static std::uint32_t NextGeneration_(std::uint32_t generation) noexcept {
+        ++generation;
+        // AssetHandle reserves zero for Invalid().
+        return generation == 0 ? 1 : generation;
+    }
+
+    void RetireGeneration_(const AssetId& id, std::uint32_t generation) {
+        retiredGenerations_[id] = generation;
+    }
+
     std::unordered_map<AssetId, std::unique_ptr<AssetRecord>> records_;
+
+    // Keep the last incarnation after eviction so a newly loaded record cannot
+    // make a previously issued handle valid again (generation ABA).
+    std::unordered_map<AssetId, std::uint32_t> retiredGenerations_;
 };
 
 } // namespace Engine::Asset::Core

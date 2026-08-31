@@ -1,15 +1,25 @@
-# =========================
-# [third_party 導入位置] ここで各 3rd party を add_subdirectory
-# =========================
-
-# SDL3（submodule等で third_party/SDL3 に置いた）
-add_subdirectory(sdl3)
-
-# nlohmann/json（header-onlyだが CMake target を出してくれる）
+# Engine runtime asset catalogs use nlohmann/json.
 add_subdirectory(nlohmann_json)
 
-# ImGui（third_party/imgui/CMakeLists.txt を使う）
-add_subdirectory(imgui)
+option(
+    GYO_BUILD_SDL_IMAGE_LOADER
+    "Build the optional SDL_image-backed runtime texture loader"
+    OFF
+)
 
-# doctest（third_party/doctest/CMakeLists.txt を使う）
-add_subdirectory(doctest)
+if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS OR
+   GYO_BUILD_SDL_GPU_BACKEND OR GYO_BUILD_SDL_IMAGE_LOADER)
+    add_subdirectory(sdl3)
+endif()
+
+if(GYO_BUILD_OBJECT_FPS OR GYO_BUILD_SDL_IMAGE_LOADER)
+    add_subdirectory(sdl3_image)
+endif()
+
+if(GYO_BUILD_SANDBOX)
+    add_subdirectory(imgui)
+endif()
+
+if(BUILD_TESTING)
+    add_subdirectory(doctest)
+endif()

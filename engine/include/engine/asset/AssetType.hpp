@@ -46,12 +46,12 @@ struct AssetType final {
     static constexpr AssetType Text()    noexcept { return AssetType(Detail::Fnv1a64("text",    4)); }
     static constexpr AssetType Binary()  noexcept { return AssetType(Detail::Fnv1a64("binary",  6)); }
     static constexpr AssetType Data()  noexcept { return AssetType(Detail::Fnv1a64("data",  4)); }
-    static constexpr AssetType Invalid() noexcept { return AssetType(Detail::Fnv1a64("invalid", 0)); }
+    static constexpr AssetType Invalid() noexcept { return {}; }
 
-    friend bool operator==(const AssetType& a, const AssetType& b) noexcept {
-        if (!a.debugName.empty() && !b.debugName.empty()) {
-            return a.debugName == b.debugName;
-        }
+    // The hashed value is the identity. debugName is diagnostic metadata and
+    // must not change equality because hashing and loader dispatch use value.
+    friend constexpr bool operator==(const AssetType& a,
+                                     const AssetType& b) noexcept {
         return a.value == b.value;
     }
 

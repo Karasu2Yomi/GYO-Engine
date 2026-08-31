@@ -33,11 +33,10 @@ struct AssetId final {
     // 便利：文字列を直接渡せる
     explicit AssetId(std::string_view s) noexcept : AssetId(FromString(s)) {}
 
-    friend bool operator==(const AssetId& a, const AssetId& b) noexcept {
-        // 両方に名前があるなら名前優先（ハッシュ衝突の検出に役立つ）
-        if (!a.debugName.empty() && !b.debugName.empty()) {
-            return a.debugName == b.debugName;
-        }
+    // Asset identity is the hashed value only. debugName is diagnostic metadata
+    // and must not change equality, otherwise unordered containers can observe
+    // equal IDs with different hashes or non-transitive equality.
+    friend constexpr bool operator==(const AssetId& a, const AssetId& b) noexcept {
         return a.value == b.value;
     }
 
